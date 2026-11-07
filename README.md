@@ -29,8 +29,15 @@ This list describes project goals, not implemented features. Telegram server-sid
 
 ## Development
 
-Development instructions will be added as the build system, TDLib integration and application structure are established. Do not treat this repository as buildable yet.
+The application skeleton and build instructions are not in place yet. See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes.
+
+## Project documentation
+
+- [Architecture direction](docs/ARCHITECTURE.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Contributing](CONTRIBUTING.md)
+- [Repository guidance](AGENTS.md)
 
 ## License
 
-The project is intended to use **GPL-3.0-or-later**. See [LICENSE](LICENSE) once the license file is added.
+Telestra is licensed under **GPL-3.0-or-later**. See [LICENSE](LICENSE). Third-party components retain their own licenses.
