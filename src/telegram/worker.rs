@@ -129,6 +129,7 @@ impl BackendWorker {
 
     /// Waits for the worker thread to finish.
     pub fn join(mut self) -> thread::Result<()> {
+        let _ = self.shutdown();
         if let Some(thread) = self.thread.take() {
             thread.join()
         } else {
@@ -297,7 +298,9 @@ fn fail_pending(
             reason: reason.to_owned(),
         });
     }
-}\n\n#[cfg(test)]
+}
+
+#[cfg(test)]
 mod tests {
     use super::{BackendWorker, WorkerEvent};
     use crate::telegram::{
@@ -443,6 +446,81 @@ mod tests {
         worker.join().unwrap();
     }
 
+
+    #[test]
+    fn worker_fails_pending_operations_when_tdlib_closes() {
+        let request_id = RequestId::new(75);
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let transport = FakeTransport {
+            incoming: VecDeque::new(),
+            sent: Arc::clone(&sent),
+        };
+        let worker = BackendWorker::spawn(transport).unwrap();
+        let request = format!(
+            r#"{{"@type":"getChats","@extra":"{}"}}"#,
+            request_id.to_extra()
+        );
+        worker
+            .send_request(request_id, "load-chats", request)
+            .unwrap();
+        worker.shutdown().unwrap();
+
+        assert!(matches!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            WorkerEvent::Backend {
+                event: crate::telegram::BackendEvent::AuthorizationStateChanged(
+                    AuthorizationState::Closed
+                ),
+                ..
+            }
+        ));
+        assert!(matches!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            WorkerEvent::PendingFailed {
+                request_id: failed,
+                operation,
+                ..
+            } if failed == request_id && operation == "load-chats"
+        ));
+        assert_eq!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            WorkerEvent::Stopped(ClientLifecycle::Closed)
+        );
+        assert_eq!(sent.lock().unwrap().len(), 1);
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn worker_does_not_accept_requests_after_shutdown_is_queued() {
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let transport = FakeTransport {
+            incoming: VecDeque::new(),
+            sent,
+        };
+        let worker = BackendWorker::spawn(transport).unwrap();
+        worker.shutdown().unwrap();
+        assert!(worker
+            .send_request(
+                RequestId::new(76),
+                "late-request",
+                r#"{"@type":"getMe","@extra":"telestra:76"}"#,
+            )
+            .is_err());
+        assert!(matches!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            WorkerEvent::Backend {
+                event: crate::telegram::BackendEvent::AuthorizationStateChanged(
+                    AuthorizationState::Closed
+                ),
+                ..
+            }
+        ));
+        assert_eq!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            WorkerEvent::Stopped(ClientLifecycle::Closed)
+        );
+        worker.join().unwrap();
+    }
     #[test]
     fn worker_surfaces_receive_failure_and_stops_as_failed() {
         struct FailingTransport;
