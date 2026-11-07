@@ -211,13 +211,13 @@ fn run_worker<T: JsonTransport>(
                         completed_operation,
                     });
 
-                    if shutdown_requested && closed {
-                        if lifecycle
+                    if shutdown_requested
+                        && closed
+                        && lifecycle
                             .observe_authorization_state(&AuthorizationState::Closed)
                             .is_err()
-                        {
-                            lifecycle.fail();
-                        }
+                    {
+                        lifecycle.fail();
                     }
                 }
                 Err(error) => {
