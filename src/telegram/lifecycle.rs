@@ -192,4 +192,25 @@ mod tests {
         closed.fail();
         assert_eq!(closed.lifecycle(), ClientLifecycle::Closed);
     }
+
+    #[test]
+    fn failure_during_close_is_not_mistaken_for_clean_shutdown() {
+        let mut state = ClientState::new();
+        state.start().unwrap();
+        state.begin_close().unwrap();
+
+        state.fail();
+
+        assert_eq!(state.lifecycle(), ClientLifecycle::Failed);
+        assert!(state.is_terminal());
+        assert_ne!(state.lifecycle(), ClientLifecycle::Closed);
+    }
+
+    #[test]
+    fn default_client_state_starts_in_created_phase() {
+        let state = ClientState::default();
+
+        assert_eq!(state.lifecycle(), ClientLifecycle::Created);
+        assert!(!state.is_terminal());
+    }
 }
