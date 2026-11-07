@@ -38,6 +38,8 @@ TDLib remains asynchronous. Its updates must be consumed without blocking GTK's 
 
 The initial packaging direction is to build TDLib from an explicitly pinned upstream source revision for each supported target, rather than downloading opaque third-party binaries during a Cargo build. Use TDLib's CMake-provided JSON interface target (Td::TdJson for the shared library, or Td::TdJsonStatic only if static-linking requirements are deliberately accepted). Keep the source revision, build options and native dependency versions identical between native-package and Flatpak builds.
 
+The initial upstream candidate is TDLib 1.8.69, pinned to the exact upstream commit `0e88653dcbf4e44c73cb655a05b58cd749a91169` (the commit that updates the upstream project version to 1.8.69). The upstream repository does not publish GitHub release assets, so the full commit SHA—not a moving branch name or a third-party binary bundle—is the source identity to evaluate. This is a candidate pin only; update it deliberately after reviewing upstream changes and rerunning the packaging matrix.
+
 The upstream build documentation identifies a C++17 compiler, OpenSSL, zlib, CMake and gperf (build-time) as the core dependencies. Its CMake build exposes dedicated JSON interface targets. For a low-memory build, upstream documents building the tdjson target after source preparation. This makes a source-based build reproducible in principle, but does not yet prove that our Flatpak manifest, native packages or supported architecture matrix work.
 
 Before treating this direction as final:
