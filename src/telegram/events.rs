@@ -77,10 +77,192 @@ pub enum BackendEvent {
     TransportFailed(TransportError),
 }
 
+
+/// One decoded backend event plus the application operation it completes, if any.
+#[derive(Debug, PartialEq, Eq)]
+pub struct RoutedBackendEvent<T> {
+    event: BackendEvent,
+    completed_request: Option<(RequestId, T)>,
+}
+
+impl<T> RoutedBackendEvent<T> {
+    /// Returns the application-facing event in TDLib receive order.
+    pub fn event(&self) -> &BackendEvent {
+        &self.event
+    }
+
+    /// Takes the completed operation, if this event matched a pending request.
+    pub fn take_completed_request(&mut self) -> Option<(RequestId, T)> {
+        self.completed_request.take()
+    }
+}
+
+/// Correlates decoded responses with pending application operations.
+///
+/// Feed messages to this router in the order returned by the single TDLib
+/// receive loop. It deliberately does not parse JSON; the adapter's decoder
+/// must classify each TDLib object before routing it here.
+#[derive(Debug, Default)]
+pub struct EventRouter<T> {
+    pending: crate::telegram::PendingRequests<T>,
+}
+
+impl<T> EventRouter<T> {
+    /// Registers an operation before its request is sent to TDLib.
+    pub fn register(&mut self, request_id: RequestId, operation: T) -> Option<T> {
+        self.pending.insert(request_id, operation)
+    }
+
+    /// Routes a response and completes only the operation matching its @extra.
+    pub fn route_response(
+        &mut self,
+        extra: Option<&str>,
+        json: String,
+    ) -> RoutedBackendEvent<T> {
+        let request_id = extra.and_then(RequestId::from_extra);
+        let completed_request = request_id
+            .and_then(|id| self.pending.resolve(id).map(|operation| (id, operation)));
+        RoutedBackendEvent {
+            event: BackendEvent::Response { request_id, json },
+            completed_request,
+        }
+    }
+
+    /// Routes a TDLib error and completes only the operation matching its @extra.
+    pub fn route_error(
+        &mut self,
+        extra: Option<&str>,
+        error: TdlibError,
+    ) -> RoutedBackendEvent<T> {
+        let request_id = extra.and_then(RequestId::from_extra);
+        let completed_request = request_id
+            .and_then(|id| self.pending.resolve(id).map(|operation| (id, operation)));
+        RoutedBackendEvent {
+            event: BackendEvent::Error { request_id, error },
+            completed_request,
+        }
+    }
+
+    /// Routes an unsolicited update without consuming a pending request.
+    pub fn route_update(&self, json: String) -> RoutedBackendEvent<T> {
+        RoutedBackendEvent {
+            event: BackendEvent::Update { json },
+            completed_request: None,
+        }
+    }
+
+    /// Routes an authorization-state update without consuming a pending request.
+    pub fn route_authorization_state(
+        &self,
+        state: AuthorizationState,
+    ) -> RoutedBackendEvent<T> {
+        RoutedBackendEvent {
+            event: BackendEvent::AuthorizationStateChanged(state),
+            completed_request: None,
+        }
+    }
+
+    /// Drains all operations still pending when the worker stops.
+    pub fn drain_pending(
+        &mut self,
+    ) -> std::collections::btree_map::IntoIter<RequestId, T> {
+        self.pending.drain()
+    }
+
+    /// Returns the number of operations awaiting a response.
+    pub fn pending_len(&self) -> usize {
+        self.pending.len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{AuthorizationState, BackendEvent, TdlibError};
     use crate::telegram::{RequestId, TransportError, TransportOperation};
+
+
+    #[test]
+    fn event_router_correlates_response_and_preserves_unmatched_operations() {
+        use super::EventRouter;
+
+        let first = RequestId::new(31);
+        let second = RequestId::new(32);
+        let mut router = EventRouter::default();
+        router.register(first, "first");
+        router.register(second, "second");
+
+        let mut response = router.route_response(
+            Some(&second.to_extra()),
+            "{\"@type\":\"ok\"}".to_owned(),
+        );
+        assert_eq!(
+            response.event(),
+            &BackendEvent::Response {
+                request_id: Some(second),
+                json: "{\"@type\":\"ok\"}".to_owned(),
+            }
+        );
+        assert_eq!(response.take_completed_request(), Some((second, "second")));
+        assert_eq!(router.pending_len(), 1);
+
+        let mut update = router.route_update("{\"@type\":\"updateNewChat\"}".to_owned());
+        assert!(matches!(update.event(), BackendEvent::Update { .. }));
+        assert_eq!(update.take_completed_request(), None);
+        assert_eq!(router.pending_len(), 1);
+        assert_eq!(router.drain_pending().collect::<Vec<_>>(), vec![(first, "first")]);
+    }
+
+    #[test]
+    fn event_router_correlates_tdlib_errors_without_consuming_unknown_ids() {
+        use super::EventRouter;
+
+        let request_id = RequestId::new(44);
+        let mut router = EventRouter::default();
+        router.register(request_id, "pending");
+
+        let mut unknown = router.route_error(
+            Some("foreign:44"),
+            TdlibError::new(400, "Invalid request"),
+        );
+        assert_eq!(
+            unknown.event(),
+            &BackendEvent::Error {
+                request_id: None,
+                error: TdlibError::new(400, "Invalid request"),
+            }
+        );
+        assert_eq!(unknown.take_completed_request(), None);
+        assert_eq!(router.pending_len(), 1);
+
+        let mut matched = router.route_error(
+            Some(&request_id.to_extra()),
+            TdlibError::new(400, "Invalid request"),
+        );
+        assert_eq!(
+            matched.take_completed_request(),
+            Some((request_id, "pending"))
+        );
+        assert_eq!(router.pending_len(), 0);
+    }
+
+    #[test]
+    fn event_router_keeps_unmatched_valid_request_ids_on_events() {
+        use super::EventRouter;
+
+        let mut router = EventRouter::<()>::default();
+        let event = router.route_response(
+            Some("telestra:999"),
+            "{\"@type\":\"ok\"}".to_owned(),
+        );
+        assert_eq!(
+            event.event(),
+            &BackendEvent::Response {
+                request_id: Some(RequestId::new(999)),
+                json: "{\"@type\":\"ok\"}".to_owned(),
+            }
+        );
+        assert_eq!(router.pending_len(), 0);
+    }
 
     #[test]
     fn unknown_authorization_states_are_preserved() {
