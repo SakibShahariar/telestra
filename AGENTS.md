@@ -22,6 +22,8 @@ The repository now contains an initial GTK4/libadwaita application shell and a d
 
 - Use Rust for application logic and GTK4/libadwaita for the desktop interface.
 - Use TDLib as the Telegram client backend. Keep Telegram-specific transport and update handling behind a narrow adapter so UI code does not depend on raw TDLib details.
+- Keep the application's `unsafe_code = "forbid"` lint in force. Put TDLib C ABI declarations, pointer ownership and C-string conversion in a dedicated, narrowly scoped FFI crate; expose only safe Rust operations and owned response strings to the application crate.
+- The TDLib receive pointer is borrowed only until the next receive/execute call on that thread. Copy it into owned memory immediately, and ensure exactly one receive loop per client applies all responses and updates in arrival order.
 - Keep network and file operations asynchronous; never block the GTK main thread.
 - Treat TDLib's actual API and documented server capabilities as authoritative. Do not promise unsupported concurrency, transfer acceleration, privacy bypasses, or server-side Premium entitlements.
 - Keep UI components accessible: keyboard navigation, screen-reader labels, scalable layouts, reduced-motion considerations and RTL support.
