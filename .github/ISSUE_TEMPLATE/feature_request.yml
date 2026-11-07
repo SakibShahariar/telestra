@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest an improvement or new capability
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+      description: Describe the user need, not just the proposed implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain how the feature should work.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: API, privacy or accessibility considerations
+      description: Mention relevant Telegram/TDLib limitations or user-data concerns, if known.
