@@ -266,10 +266,7 @@ impl SharedDispatcher {
     }
 
     /// Registers an account and returns its dedicated ordered message mailbox.
-    pub fn register_client(
-        &self,
-        client_id: i32,
-    ) -> Result<Receiver<String>, DispatchError> {
+    pub fn register_client(&self, client_id: i32) -> Result<Receiver<String>, DispatchError> {
         let (reply, response) = mpsc::channel();
         self.commands
             .send(DispatcherCommand::Register { client_id, reply })
@@ -362,9 +359,7 @@ mod shared_dispatcher_tests {
             match self.incoming.recv_timeout(timeout) {
                 Ok(message) => Ok(Some(message)),
                 Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    Err("source disconnected".to_owned())
-                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => Err("source disconnected".to_owned()),
             }
         }
     }
@@ -387,7 +382,6 @@ mod shared_dispatcher_tests {
         dispatcher.shutdown().unwrap();
     }
 
-
     #[test]
     fn shared_dispatcher_reports_messages_for_unregistered_clients() {
         let (incoming, source) = mpsc::channel();
@@ -398,7 +392,10 @@ mod shared_dispatcher_tests {
             .unwrap();
 
         assert_eq!(
-            dispatcher.events().recv_timeout(Duration::from_secs(1)).unwrap(),
+            dispatcher
+                .events()
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap(),
             DispatchError::UnknownClient(47)
         );
         dispatcher.shutdown().unwrap();
