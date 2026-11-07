@@ -19,14 +19,16 @@ UI components should not construct raw TDLib requests directly. The adapter shou
 
 **Protocol boundary: TDLib JSON interface.** TDLib's official documentation recommends the JSON interface for most use cases and describes the API as fully asynchronous. Requests and responses are correlated with the `@extra` field, while updates carry essential state changes. The adapter must therefore own request correlation, update dispatch, error conversion and orderly shutdown; none of these details belong in GTK widgets.
 
-**Rust transport implementation: still under evaluation.** The `tdlib-rs` crate is a promising candidate: its 1.4.0 release documents support for TDLib 1.8.61, generated Rust types, and build modes including precompiled Linux x86_64/ARM64 libraries. It is not adopted yet. Before selecting it, a small integration spike must verify:
-- Build reproducibility on the supported Linux targets.
-- How the native TDLib library is packaged and discovered at runtime, especially in Flatpak.
-- License compatibility and the exact upstream maintenance/release process.
-- Client ownership, update delivery, cancellation and shutdown behavior.
-- Whether the wrapper exposes the TDLib methods needed for transfers without hiding important capabilities.
+**Rust transport implementation: use a small audited FFI boundary around TDLib's modern client-scoped JSON API.** The `tdlib-rs 1.4.0` crate was investigated but is not selected for the runtime. Its public API exposes a process-wide `receive()` function and client IDs; a downstream integration example describes the underlying calls as `td_send` / `td_receive`. Those are the older global JSON interface, which TDLib documents as deprecated for removal in TDLib 2.0.0. This conflicts with Telestra's requirement to own one receive loop per client using `td_json_client_create/send/receive/destroy`. The crate may still be useful as a reference for generated types, but it must not become the runtime dependency unless a modern client-scoped implementation is verified.
 
-If the wrapper cannot meet those requirements, use the JSON interface through a small audited FFI layer rather than coupling the rest of the application to a third-party wrapper.
+The adapter will therefore call the modern TDLib C JSON API through a narrowly scoped FFI module, keeping all unsafe code and C-string handling inside that boundary. The FFI layer will expose safe Rust operations and owned JSON strings to the rest of the application. TDLib itself will be built and packaged separately from the GTK application, pinned to an explicit upstream revision. Before enabling the runtime in normal builds, verify:
+- Reproducible TDLib builds for each supported Linux architecture.
+- Native package and Flatpak integration, including library discovery and runtime dependencies.
+- The exact exported `td_json_client_*` symbols in the packaged library.
+- Client ownership, ordered update delivery, request correlation, cancellation and shutdown.
+- License compatibility and the upstream security/update process.
+
+The `tdlib-rs` build modes are not a shortcut around this packaging work: its download mode fetches a release archive during Cargo builds, its dynamic mode uses a build-output RPATH, and its static mode requires additional C++ runtime libraries on Linux.
 
 The current `tdlib-rs 1.4.0` build script adds specific packaging risks that must be tested rather than assumed away: its `download-tdlib` mode downloads a release archive during Cargo's build; its dynamic mode embeds an RPATH pointing into Cargo's `OUT_DIR`; and its Linux static mode links the C++ runtime libraries `c++` and `c++abi` in addition to TDLib's static libraries. A Flatpak build would need a pinned, offline-available native-library input and a verified runtime/linking arrangement. These details make the crate a candidate for a prototype, not yet an approved production dependency.
 
@@ -91,6 +93,7 @@ Record further decisions here when supported by a small technical investigation 
 
 - [TDLib getting started](https://core.telegram.org/tdlib/getting-started) — asynchronous request/response flow, updates and authorization.
 - [TDLib documentation](https://core.telegram.org/tdlib/docs/) — JSON interface recommendation and API reference.
-- [tdlib-rs on docs.rs](https://docs.rs/crate/tdlib-rs/1.4.0) — Rust wrapper candidate, supported TDLib version and native-library build modes.
+- [tdlib-rs 1.4.0 API](https://docs.rs/tdlib-rs/1.4.0/tdlib_rs/) — investigated wrapper API; not selected because its public client/receive model does not match Telestra's required modern client-scoped runtime.
+- [TDLib JSON C header](https://github.com/tdlib/td/blob/master/td/telegram/td_json_client.h) — authoritative client-scoped JSON C ABI and legacy-interface status.
 - [gtk4 Rust bindings](https://docs.rs/gtk4/latest/gtk4/) — GTK4 Rust API and application lifecycle.
 - [libadwaita Rust bindings](https://docs.rs/libadwaita/latest/libadwaita/) — libadwaita application and window patterns.
