@@ -55,3 +55,10 @@ The current tests cover the transport contract, request-ID generation and pendin
 ## Native build gate
 
 Do not enable a native runtime dependency until the pinned TDLib source has been built reproducibly for the supported architectures, the preferred `td_create_client_id`, `td_send` and `td_receive` symbols and runtime dependencies have been inspected, and native-package plus Flatpak smoke tests pass. See [Architecture](ARCHITECTURE.md) for the candidate source pin and packaging checklist.
+
+
+## Shared receive dispatcher abstraction
+
+The transport-independent dispatcher is implemented as `SharedDispatcher`. It owns a dedicated thread and a `SharedReceiveSource`; only that thread polls the source. The source contract requires bounded receives and owned message strings, allowing the native TDLib adapter to copy its borrowed C response before polling again.
+
+Account registration is serialized through dispatcher commands. Each account receives a dedicated FIFO mailbox, and routing failures or native receive failures are surfaced through the dispatcher's event receiver rather than silently discarded. The abstraction is tested with a channel-backed source; it is not yet connected to TDLib's native C ABI.

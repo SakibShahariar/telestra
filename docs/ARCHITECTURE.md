@@ -135,3 +135,6 @@ Record further decisions here when supported by a small technical investigation 
 - [Pinned TDLib JSON C header](https://github.com/tdlib/td/blob/0e88653dcbf4e44c73cb655a05b58cd749a91169/td/telegram/td_json_client.h) — authoritative API declarations and explicit status of the old `td_json_client_*` alternative.
 - [gtk4 Rust bindings](https://docs.rs/gtk4/latest/gtk4/) — GTK4 Rust API and application lifecycle.
 - [libadwaita Rust bindings](https://docs.rs/libadwaita/latest/libadwaita/) — libadwaita application and window patterns.
+
+
+The process-wide receive topology now has a transport-independent `SharedDispatcher` implementation. It owns the sole receive-source thread, serializes account mailbox registration/removal, routes owned messages by `@client_id`, and exposes routing/native receive failures. The source remains injected; the actual TDLib C ABI implementation and packaging are still outstanding.
