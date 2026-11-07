@@ -25,6 +25,15 @@ pub enum DecodedMessage {
     AuthorizationStateChanged(AuthorizationState),
 }
 
+/// A decoded message together with its TDLib account routing identifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodedEnvelope {
+    /// TDLib's process-wide client identifier, when supplied by the runtime.
+    pub client_id: Option<i32>,
+    /// The decoded application-facing message.
+    pub message: DecodedMessage,
+}
+
 /// Errors encountered while decoding a TDLib JSON message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecodeError {
@@ -52,8 +61,8 @@ impl std::fmt::Display for DecodeError {
 
 impl std::error::Error for DecodeError {}
 
-/// Decodes one complete TDLib JSON object without discarding unknown fields.
-pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
+/// Decodes one complete TDLib JSON object and extracts its client routing ID.
+pub fn decode_envelope(json: &str) -> Result<DecodedEnvelope, DecodeError> {
     let mut parser = Parser {
         input: json.as_bytes(),
         offset: 0,
@@ -75,6 +84,16 @@ pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
         .get("@extra")
         .and_then(Value::as_str)
         .map(str::to_owned);
+    let client_id = match object.get("@client_id") {
+        None => None,
+        Some(value) => {
+            let id = value
+                .as_i64()
+                .and_then(|value| i32::try_from(value).ok())
+                .ok_or_else(|| parser.error("TDLib @client_id must be a valid integer"))?;
+            Some(id)
+        }
+    };
 
     if kind == "error" {
         let code = object
@@ -86,9 +105,12 @@ pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
             .get("message")
             .and_then(Value::as_str)
             .ok_or_else(|| parser.error("TDLib error is missing string message"))?;
-        return Ok(DecodedMessage::Error {
-            extra,
-            error: TdlibError::new(code, message),
+        return Ok(DecodedEnvelope {
+            client_id,
+            message: DecodedMessage::Error {
+                extra,
+                error: TdlibError::new(code, message),
+            },
         });
     }
 
@@ -101,21 +123,33 @@ pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
             .ok_or_else(|| {
                 parser.error("authorization update is missing authorization_state.@type")
             })?;
-        return Ok(DecodedMessage::AuthorizationStateChanged(
-            decode_authorization_state(state),
-        ));
-    }
-
-    if kind.starts_with("update") {
-        return Ok(DecodedMessage::Update {
-            json: json.to_owned(),
+        return Ok(DecodedEnvelope {
+            client_id,
+            message: DecodedMessage::AuthorizationStateChanged(decode_authorization_state(state)),
         });
     }
 
-    Ok(DecodedMessage::Response {
-        extra,
-        json: json.to_owned(),
+    if kind.starts_with("update") {
+        return Ok(DecodedEnvelope {
+            client_id,
+            message: DecodedMessage::Update {
+                json: json.to_owned(),
+            },
+        });
+    }
+
+    Ok(DecodedEnvelope {
+        client_id,
+        message: DecodedMessage::Response {
+            extra,
+            json: json.to_owned(),
+        },
     })
+}
+
+/// Decodes one complete TDLib JSON object without discarding unknown fields.
+pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
+    decode_envelope(json).map(|envelope| envelope.message)
 }
 
 fn decode_authorization_state(state: &str) -> AuthorizationState {
@@ -439,6 +473,30 @@ mod tests {
                 json: json.to_owned()
             })
         );
+    }
+
+    #[test]
+    fn extracts_client_id_for_shared_tdlib_receive_routing() {
+        use super::{DecodedMessage, decode_envelope};
+
+        let json = r#"{"@type":"updateNewChat","@client_id":42,"chat":{"id":12}}"#;
+        assert_eq!(
+            decode_envelope(json),
+            Ok(super::DecodedEnvelope {
+                client_id: Some(42),
+                message: DecodedMessage::Update {
+                    json: json.to_owned(),
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_client_id_values() {
+        use super::decode_envelope;
+
+        assert!(decode_envelope(r#"{"@type":"ok","@client_id":"42"}"#).is_err());
+        assert!(decode_envelope(r#"{"@type":"ok","@client_id":2147483648}"#).is_err());
     }
 
     #[test]
