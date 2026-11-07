@@ -10,7 +10,7 @@ mod lifecycle;
 mod protocol;
 mod transport;
 
-pub use decoder::{decode_message, DecodeError, DecodedMessage};
+pub use decoder::{DecodeError, DecodedMessage, decode_message};
 pub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEvent, TdlibError};
 pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};

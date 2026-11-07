@@ -11,9 +11,17 @@ use super::{AuthorizationState, TdlibError};
 /// A decoded TDLib message envelope.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DecodedMessage {
-    Response { extra: Option<String>, json: String },
-    Error { extra: Option<String>, error: TdlibError },
-    Update { json: String },
+    Response {
+        extra: Option<String>,
+        json: String,
+    },
+    Error {
+        extra: Option<String>,
+        error: TdlibError,
+    },
+    Update {
+        json: String,
+    },
     AuthorizationStateChanged(AuthorizationState),
 }
 
@@ -26,10 +34,14 @@ pub struct DecodeError {
 
 impl DecodeError {
     /// Byte offset at which decoding failed.
-    pub const fn offset(&self) -> usize { self.offset }
+    pub const fn offset(&self) -> usize {
+        self.offset
+    }
 
     /// Stable diagnostic for the decoding failure.
-    pub const fn message(&self) -> &'static str { self.message }
+    pub const fn message(&self) -> &'static str {
+        self.message
+    }
 }
 
 impl std::fmt::Display for DecodeError {
@@ -42,7 +54,10 @@ impl std::error::Error for DecodeError {}
 
 /// Decodes one complete TDLib JSON object without discarding unknown fields.
 pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
-    let mut parser = Parser { input: json.as_bytes(), offset: 0 };
+    let mut parser = Parser {
+        input: json.as_bytes(),
+        offset: 0,
+    };
     let value = parser.parse_value(0)?;
     parser.skip_whitespace();
     if parser.offset != parser.input.len() {
@@ -52,15 +67,24 @@ pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
         Value::Object(object) => object,
         _ => return Err(parser.error("TDLib message must be a JSON object")),
     };
-    let kind = object.get("@type").and_then(Value::as_str)
+    let kind = object
+        .get("@type")
+        .and_then(Value::as_str)
         .ok_or_else(|| parser.error("TDLib message is missing string @type"))?;
-    let extra = object.get("@extra").and_then(Value::as_str).map(str::to_owned);
+    let extra = object
+        .get("@extra")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
 
     if kind == "error" {
-        let code = object.get("code").and_then(Value::as_i64)
+        let code = object
+            .get("code")
+            .and_then(Value::as_i64)
             .and_then(|value| i32::try_from(value).ok())
             .ok_or_else(|| parser.error("TDLib error is missing a valid integer code"))?;
-        let message = object.get("message").and_then(Value::as_str)
+        let message = object
+            .get("message")
+            .and_then(Value::as_str)
             .ok_or_else(|| parser.error("TDLib error is missing string message"))?;
         return Ok(DecodedMessage::Error {
             extra,
@@ -69,19 +93,29 @@ pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
     }
 
     if kind == "updateAuthorizationState" {
-        let state = object.get("authorization_state")
+        let state = object
+            .get("authorization_state")
             .and_then(Value::as_object)
             .and_then(|state| state.get("@type"))
             .and_then(Value::as_str)
-            .ok_or_else(|| parser.error("authorization update is missing authorization_state.@type"))?;
-        return Ok(DecodedMessage::AuthorizationStateChanged(decode_authorization_state(state)));
+            .ok_or_else(|| {
+                parser.error("authorization update is missing authorization_state.@type")
+            })?;
+        return Ok(DecodedMessage::AuthorizationStateChanged(
+            decode_authorization_state(state),
+        ));
     }
 
     if kind.starts_with("update") {
-        return Ok(DecodedMessage::Update { json: json.to_owned() });
+        return Ok(DecodedMessage::Update {
+            json: json.to_owned(),
+        });
     }
 
-    Ok(DecodedMessage::Response { extra, json: json.to_owned() })
+    Ok(DecodedMessage::Response {
+        extra,
+        json: json.to_owned(),
+    })
 }
 
 fn decode_authorization_state(state: &str) -> AuthorizationState {
@@ -111,15 +145,27 @@ enum Value {
 
 impl Value {
     fn as_str(&self) -> Option<&str> {
-        if let Self::String(value) = self { Some(value) } else { None }
+        if let Self::String(value) = self {
+            Some(value)
+        } else {
+            None
+        }
     }
 
     fn as_i64(&self) -> Option<i64> {
-        if let Self::Number(value) = self { *value } else { None }
+        if let Self::Number(value) = self {
+            *value
+        } else {
+            None
+        }
     }
 
     fn as_object(&self) -> Option<&BTreeMap<String, Value>> {
-        if let Self::Object(value) = self { Some(value) } else { None }
+        if let Self::Object(value) = self {
+            Some(value)
+        } else {
+            None
+        }
     }
 }
 
@@ -130,11 +176,17 @@ struct Parser<'a> {
 
 impl Parser<'_> {
     fn error(&self, message: &'static str) -> DecodeError {
-        DecodeError { offset: self.offset, message }
+        DecodeError {
+            offset: self.offset,
+            message,
+        }
     }
 
     fn skip_whitespace(&mut self) {
-        while matches!(self.input.get(self.offset), Some(b' ' | b'\n' | b'\r' | b'\t')) {
+        while matches!(
+            self.input.get(self.offset),
+            Some(b' ' | b'\n' | b'\r' | b'\t')
+        ) {
             self.offset += 1;
         }
     }
@@ -150,15 +202,26 @@ impl Parser<'_> {
     }
 
     fn parse_value(&mut self, depth: usize) -> Result<Value, DecodeError> {
-        if depth > 128 { return Err(self.error("JSON nesting limit exceeded")); }
+        if depth > 128 {
+            return Err(self.error("JSON nesting limit exceeded"));
+        }
         self.skip_whitespace();
         match self.input.get(self.offset).copied() {
             Some(b'"') => self.parse_string().map(Value::String),
             Some(b'{') => self.parse_object(depth + 1),
             Some(b'[') => self.parse_array(depth + 1),
-            Some(b't') => { self.parse_literal(b"true")?; Ok(Value::Bool) }
-            Some(b'f') => { self.parse_literal(b"false")?; Ok(Value::Bool) }
-            Some(b'n') => { self.parse_literal(b"null")?; Ok(Value::Null) }
+            Some(b't') => {
+                self.parse_literal(b"true")?;
+                Ok(Value::Bool)
+            }
+            Some(b'f') => {
+                self.parse_literal(b"false")?;
+                Ok(Value::Bool)
+            }
+            Some(b'n') => {
+                self.parse_literal(b"null")?;
+                Ok(Value::Null)
+            }
             Some(b'-' | b'0'..=b'9') => self.parse_number(),
             _ => Err(self.error("invalid or incomplete JSON value")),
         }
@@ -179,7 +242,10 @@ impl Parser<'_> {
         let mut output = String::new();
         let mut segment_start = self.offset;
         loop {
-            let byte = *self.input.get(self.offset).ok_or_else(|| self.error("unterminated JSON string"))?;
+            let byte = *self
+                .input
+                .get(self.offset)
+                .ok_or_else(|| self.error("unterminated JSON string"))?;
             match byte {
                 b'"' => {
                     let segment = std::str::from_utf8(&self.input[segment_start..self.offset])
@@ -193,7 +259,10 @@ impl Parser<'_> {
                         .map_err(|_| self.error("invalid UTF-8 in JSON string"))?;
                     output.push_str(segment);
                     self.offset += 1;
-                    let escaped = *self.input.get(self.offset).ok_or_else(|| self.error("incomplete JSON escape"))?;
+                    let escaped = *self
+                        .input
+                        .get(self.offset)
+                        .ok_or_else(|| self.error("incomplete JSON escape"))?;
                     self.offset += 1;
                     match escaped {
                         b'"' => output.push('"'),
@@ -215,11 +284,18 @@ impl Parser<'_> {
                                 if !(0xDC00..=0xDFFF).contains(&second) {
                                     return Err(self.error("invalid low surrogate in JSON escape"));
                                 }
-                                0x10000 + (((first - 0xD800) as u32) << 10) + (second - 0xDC00) as u32
+                                0x10000
+                                    + (((first - 0xD800) as u32) << 10)
+                                    + (second - 0xDC00) as u32
                             } else if (0xDC00..=0xDFFF).contains(&first) {
                                 return Err(self.error("unexpected low surrogate in JSON escape"));
-                            } else { first as u32 };
-                            output.push(char::from_u32(scalar).ok_or_else(|| self.error("invalid Unicode scalar"))?);
+                            } else {
+                                first as u32
+                            };
+                            output.push(
+                                char::from_u32(scalar)
+                                    .ok_or_else(|| self.error("invalid Unicode scalar"))?,
+                            );
                         }
                         _ => return Err(self.error("invalid JSON string escape")),
                     }
@@ -233,7 +309,10 @@ impl Parser<'_> {
 
     fn parse_hex_quad(&mut self) -> Result<u16, DecodeError> {
         let end = self.offset.saturating_add(4);
-        let digits = self.input.get(self.offset..end).ok_or_else(|| self.error("incomplete Unicode escape"))?;
+        let digits = self
+            .input
+            .get(self.offset..end)
+            .ok_or_else(|| self.error("incomplete Unicode escape"))?;
         let mut value = 0u16;
         for digit in digits {
             let nibble = match digit {
@@ -250,43 +329,64 @@ impl Parser<'_> {
 
     fn parse_number(&mut self) -> Result<Value, DecodeError> {
         let start = self.offset;
-        if self.input.get(self.offset) == Some(&b'-') { self.offset += 1; }
+        if self.input.get(self.offset) == Some(&b'-') {
+            self.offset += 1;
+        }
         match self.input.get(self.offset) {
             Some(b'0') => self.offset += 1,
             Some(b'1'..=b'9') => {
                 self.offset += 1;
-                while matches!(self.input.get(self.offset), Some(b'0'..=b'9')) { self.offset += 1; }
+                while matches!(self.input.get(self.offset), Some(b'0'..=b'9')) {
+                    self.offset += 1;
+                }
             }
             _ => return Err(self.error("invalid JSON number")),
         }
         if self.input.get(self.offset) == Some(&b'.') {
             self.offset += 1;
             let fraction_start = self.offset;
-            while matches!(self.input.get(self.offset), Some(b'0'..=b'9')) { self.offset += 1; }
-            if self.offset == fraction_start { return Err(self.error("invalid JSON fraction")); }
+            while matches!(self.input.get(self.offset), Some(b'0'..=b'9')) {
+                self.offset += 1;
+            }
+            if self.offset == fraction_start {
+                return Err(self.error("invalid JSON fraction"));
+            }
         }
         if matches!(self.input.get(self.offset), Some(b'e' | b'E')) {
             self.offset += 1;
-            if matches!(self.input.get(self.offset), Some(b'+' | b'-')) { self.offset += 1; }
+            if matches!(self.input.get(self.offset), Some(b'+' | b'-')) {
+                self.offset += 1;
+            }
             let exponent_start = self.offset;
-            while matches!(self.input.get(self.offset), Some(b'0'..=b'9')) { self.offset += 1; }
-            if self.offset == exponent_start { return Err(self.error("invalid JSON exponent")); }
+            while matches!(self.input.get(self.offset), Some(b'0'..=b'9')) {
+                self.offset += 1;
+            }
+            if self.offset == exponent_start {
+                return Err(self.error("invalid JSON exponent"));
+            }
         }
         let number = std::str::from_utf8(&self.input[start..self.offset])
-            .ok().and_then(|text| text.parse::<i64>().ok());
+            .ok()
+            .and_then(|text| text.parse::<i64>().ok());
         Ok(Value::Number(number))
     }
 
     fn parse_array(&mut self, depth: usize) -> Result<Value, DecodeError> {
         self.consume(b'[')?;
         self.skip_whitespace();
-        if self.input.get(self.offset) == Some(&b']') { self.offset += 1; return Ok(Value::Array); }
+        if self.input.get(self.offset) == Some(&b']') {
+            self.offset += 1;
+            return Ok(Value::Array);
+        }
         loop {
             self.parse_value(depth)?;
             self.skip_whitespace();
             match self.input.get(self.offset) {
                 Some(b',') => self.offset += 1,
-                Some(b']') => { self.offset += 1; return Ok(Value::Array); }
+                Some(b']') => {
+                    self.offset += 1;
+                    return Ok(Value::Array);
+                }
                 _ => return Err(self.error("expected comma or closing array bracket")),
             }
         }
@@ -296,18 +396,28 @@ impl Parser<'_> {
         self.consume(b'{')?;
         let mut object = BTreeMap::new();
         self.skip_whitespace();
-        if self.input.get(self.offset) == Some(&b'}') { self.offset += 1; return Ok(Value::Object(object)); }
+        if self.input.get(self.offset) == Some(&b'}') {
+            self.offset += 1;
+            return Ok(Value::Object(object));
+        }
         loop {
             self.skip_whitespace();
-            if self.input.get(self.offset) != Some(&b'"') { return Err(self.error("object key must be a string")); }
+            if self.input.get(self.offset) != Some(&b'"') {
+                return Err(self.error("object key must be a string"));
+            }
             let key = self.parse_string()?;
             self.consume(b':')?;
             let value = self.parse_value(depth)?;
-            if object.insert(key, value).is_some() { return Err(self.error("duplicate JSON object key")); }
+            if object.insert(key, value).is_some() {
+                return Err(self.error("duplicate JSON object key"));
+            }
             self.skip_whitespace();
             match self.input.get(self.offset) {
                 Some(b',') => self.offset += 1,
-                Some(b'}') => { self.offset += 1; return Ok(Value::Object(object)); }
+                Some(b'}') => {
+                    self.offset += 1;
+                    return Ok(Value::Object(object));
+                }
                 _ => return Err(self.error("expected comma or closing object brace")),
             }
         }
@@ -316,35 +426,63 @@ impl Parser<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_message, DecodedMessage};
+    use super::{DecodedMessage, decode_message};
     use crate::telegram::{AuthorizationState, TdlibError};
 
     #[test]
     fn decodes_correlated_success_response_and_preserves_payload() {
         let json = r#"{"@type":"ok","@extra":"telestra:7","nested":{"text":"a \"quote\""} }"#;
-        assert_eq!(decode_message(json), Ok(DecodedMessage::Response {
-            extra: Some("telestra:7".to_owned()), json: json.to_owned()
-        }));
+        assert_eq!(
+            decode_message(json),
+            Ok(DecodedMessage::Response {
+                extra: Some("telestra:7".to_owned()),
+                json: json.to_owned()
+            })
+        );
     }
 
     #[test]
     fn decodes_error_code_message_and_correlation() {
-        assert_eq!(decode_message(r#"{"@type":"error","code":401,"message":"Unauthorized","@extra":"telestra:8"}"#),
-            Ok(DecodedMessage::Error { extra: Some("telestra:8".to_owned()), error: TdlibError::new(401, "Unauthorized") }));
+        assert_eq!(
+            decode_message(
+                r#"{"@type":"error","code":401,"message":"Unauthorized","@extra":"telestra:8"}"#
+            ),
+            Ok(DecodedMessage::Error {
+                extra: Some("telestra:8".to_owned()),
+                error: TdlibError::new(401, "Unauthorized")
+            })
+        );
     }
 
     #[test]
     fn decodes_authorization_update_and_future_states() {
-        assert_eq!(decode_message(r#"{"@type":"updateAuthorizationState","authorization_state":{"@type":"authorizationStateReady"}}"#),
-            Ok(DecodedMessage::AuthorizationStateChanged(AuthorizationState::Ready)));
-        assert_eq!(decode_message(r#"{"@type":"updateAuthorizationState","authorization_state":{"@type":"authorizationStateFuture"}}"#),
-            Ok(DecodedMessage::AuthorizationStateChanged(AuthorizationState::Unknown("authorizationStateFuture".to_owned()))));
+        assert_eq!(
+            decode_message(
+                r#"{"@type":"updateAuthorizationState","authorization_state":{"@type":"authorizationStateReady"}}"#
+            ),
+            Ok(DecodedMessage::AuthorizationStateChanged(
+                AuthorizationState::Ready
+            ))
+        );
+        assert_eq!(
+            decode_message(
+                r#"{"@type":"updateAuthorizationState","authorization_state":{"@type":"authorizationStateFuture"}}"#
+            ),
+            Ok(DecodedMessage::AuthorizationStateChanged(
+                AuthorizationState::Unknown("authorizationStateFuture".to_owned())
+            ))
+        );
     }
 
     #[test]
     fn preserves_unknown_update_payloads() {
         let json = r#"{"@type":"updateNewChat","chat":{"id":12}}"#;
-        assert_eq!(decode_message(json), Ok(DecodedMessage::Update { json: json.to_owned() }));
+        assert_eq!(
+            decode_message(json),
+            Ok(DecodedMessage::Update {
+                json: json.to_owned()
+            })
+        );
     }
 
     #[test]
@@ -363,6 +501,12 @@ mod tests {
     #[test]
     fn parses_escaped_unicode_and_nested_values() {
         let json = r#"{"@type":"ok","text":"\uD83D\uDE80","items":[true,null,{"n":-4.25e2}]}"#;
-        assert_eq!(decode_message(json), Ok(DecodedMessage::Response { extra: None, json: json.to_owned() }));
+        assert_eq!(
+            decode_message(json),
+            Ok(DecodedMessage::Response {
+                extra: None,
+                json: json.to_owned()
+            })
+        );
     }
 }
