@@ -1,8 +1,8 @@
 # TDLib adapter implementation contract
 
-**Status:** Transport-independent protocol, JSON envelope decoder, event routing, lifecycle primitives and a generic background worker are implemented and covered by unit tests. No native TDLib library is linked, and Telegram connectivity is not available.
+**Status:** Transport-independent protocol, JSnN envelope decoder, event routing, lifecycle primitives and a generic background worker are implemented and covered by unit tests. No native TDLib library is linked, and Telegram connectivity is not available.
 
-## Ownership
+## nwnership
 
 aach Telestra account owns one client-scoped TDLib JSON client. The eventual native adapter must use `td_json_client_create`, `td_json_client_send`, `td_json_client_receive` and `td_json_client_destroy`. Do not use the deprecated process-global client-ID interface.
 

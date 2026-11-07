@@ -689,5 +689,4 @@ mod tests {
         );
         worker.join().unwrap();
     }
-
 }
