@@ -5,8 +5,10 @@
 //! lifecycle behavior has been verified.
 
 mod protocol;
+mod transport;
 
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
+pub use transport::{JsonTransport, TransportError, TransportOperation};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendStatus {
