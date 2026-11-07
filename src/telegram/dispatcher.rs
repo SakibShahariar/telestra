@@ -30,13 +30,19 @@ impl fmt::Display for DispatchError {
         match self {
             Self::MissingClientId => formatter.write_str("TDLib message has no @client_id"),
             Self::UnknownClient(client_id) => {
-                write!(formatter, "no mailbox registered for TDLib client {client_id}")
+                write!(
+                    formatter,
+                    "no mailbox registered for TDLib client {client_id}"
+                )
             }
             Self::DuplicateClient(client_id) => {
                 write!(formatter, "TDLib client {client_id} already has a mailbox")
             }
             Self::MailboxDisconnected(client_id) => {
-                write!(formatter, "mailbox for TDLib client {client_id} is disconnected")
+                write!(
+                    formatter,
+                    "mailbox for TDLib client {client_id} is disconnected"
+                )
             }
             Self::Decode(error) => write!(formatter, "invalid TDLib message: {error}"),
         }
@@ -83,9 +89,7 @@ impl ClientMailboxRegistry {
     /// decode and process it without losing fields unknown to this version.
     pub fn route_json(&self, json: String) -> Result<(), DispatchError> {
         let envelope = decode_envelope(&json).map_err(DispatchError::Decode)?;
-        let client_id = envelope
-            .client_id
-            .ok_or(DispatchError::MissingClientId)?;
+        let client_id = envelope.client_id.ok_or(DispatchError::MissingClientId)?;
         let mailbox = self
             .mailboxes
             .get(&client_id)
