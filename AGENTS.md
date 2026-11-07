@@ -12,7 +12,7 @@ The project is in its initial planning stage. Do not describe planned functional
 - Inspect the current repository state before making changes. Fetch the current contents and blob SHA of every existing file immediately before editing it.
 - Re-check the default branch head before each commit. Never overwrite concurrent changes.
 - Do not force-push, rewrite history, amend published commits, create unapproved branches, or open pull requests unless explicitly requested.
-- Keep commits focused and use conventional commit subjects, for example `feat:`, `fix:`, `docs:`, `build:`, `test:`, and `refactor:`.
+- Keep commits focused and use conventional commit subjects, for example `feat:`, `fix:`, `docs:`, `build:`, `test:`, and `refactor:`. When a commit addresses a GitHub issue, include its reference in the subject, such as `feat(downloads): add transfer queue (#15)`. Include multiple issue references only when the commit genuinely addresses each one.
 - Preserve existing architecture, public interfaces, dependencies, formatting and maintainer decisions unless a change is justified.
 - Prefer small, reviewable changes. Do not add dependencies without a clear need and an explanation of the trade-off.
 - Verify relevant tests, formatting, linting and CI results. Never claim a check passed unless it was actually run and its result inspected.
