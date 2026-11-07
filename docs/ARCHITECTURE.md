@@ -28,6 +28,8 @@ UI components should not construct raw TDLib requests directly. The adapter shou
 
 If the wrapper cannot meet those requirements, use the JSON interface through a small audited FFI layer rather than coupling the rest of the application to a third-party wrapper.
 
+The current `tdlib-rs 1.4.0` build script adds specific packaging risks that must be tested rather than assumed away: its `download-tdlib` mode downloads a release archive during Cargo's build; its dynamic mode embeds an RPATH pointing into Cargo's `OUT_DIR`; and its Linux static mode links the C++ runtime libraries `c++` and `c++abi` in addition to TDLib's static libraries. A Flatpak build would need a pinned, offline-available native-library input and a verified runtime/linking arrangement. These details make the crate a candidate for a prototype, not yet an approved production dependency.
+
 TDLib remains asynchronous. Its updates must be consumed without blocking GTK's main thread. Background runtime ownership and shutdown must be explicit, and GTK-facing state changes must be marshalled onto the main context.
 
 ### JSON client lifecycle requirements
