@@ -72,3 +72,11 @@ A unified media library may index metadata from chats and local files, but shoul
 - Test strategy for TDLib integration and GUI behavior.
 
 Record further decisions here when supported by a small technical investigation or prototype.
+
+## Technical references
+
+- [TDLib getting started](https://core.telegram.org/tdlib/getting-started) — asynchronous request/response flow, updates and authorization.
+- [TDLib documentation](https://core.telegram.org/tdlib/docs/) — JSON interface recommendation and API reference.
+- [tdlib-rs on docs.rs](https://docs.rs/crate/tdlib-rs/1.4.0) — Rust wrapper candidate, supported TDLib version and native-library build modes.
+- [gtk4 Rust bindings](https://docs.rs/gtk4/latest/gtk4/) — GTK4 Rust API and application lifecycle.
+- [libadwaita Rust bindings](https://docs.rs/libadwaita/latest/libadwaita/) — libadwaita application and window patterns.
