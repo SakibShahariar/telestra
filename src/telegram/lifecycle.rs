@@ -4,8 +4,8 @@
 //! reject invalid transitions and, in particular, to distinguish requesting
 //! shutdown from TDLib confirming that its authorization state is closed.
 
-use std::fmt;
 use super::events::AuthorizationState;
+use std::fmt;
 
 /// Observable lifecycle phase for one owned TDLib client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -54,7 +54,6 @@ impl std::error::Error for LifecycleError {}
 pub struct ClientState {
     lifecycle: ClientLifecycle,
 }
-
 
 impl ClientState {
     /// Creates a state machine for a newly-created client.

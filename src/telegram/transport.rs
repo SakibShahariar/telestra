@@ -132,10 +132,7 @@ mod tests {
 
         assert_eq!(
             transport.sent,
-            vec![
-                "{\"@type\":\"getMe\"}",
-                "{\"@type\":\"getChats\"}"
-            ]
+            vec!["{\"@type\":\"getMe\"}", "{\"@type\":\"getChats\"}"]
         );
     }
 
