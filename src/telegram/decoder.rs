@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn parses_escaped_unicode_and_nested_values() {
-        let json = r#"{"@type":"ok","text":"\uD83D\uDE80","items":[true,null,{"n":-4}]}"#;
+        let json = r#"{"@type":"ok","text":"\uD83D\uDE80","items":[true,null,{"n":-4.25e2}]}"#;
         assert_eq!(decode_message(json), Ok(DecodedMessage::Response { extra: None, json: json.to_owned() }));
     }
 }
