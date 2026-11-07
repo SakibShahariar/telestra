@@ -59,7 +59,7 @@ impl std::error::Error for TransportError {}
 /// string; the dispatcher must copy TDLib's borrowed C pointer before its next
 /// native receive call. Only that dispatcher may call `td_receive`.
 pub trait JsonTransport: Send + 'static {
-    /// Sends one complete JSON request to the owned TDLib client.
+    /// Sends one complete JSON request to this account's TDLib client ID.
     fn send(&mut self, request: &str) -> Result<(), TransportError>;
 
     /// Receives the next message, waiting no longer than `timeout`.

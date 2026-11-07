@@ -30,11 +30,11 @@ The `tdlib-rs 1.4.0` crate is not selected for the runtime until its process-wid
 - One process-wide receive owner, ordered event routing by `@client_id`, request correlation, and orderly close behavior.
 - License compatibility and the upstream security/update process.
 
-The adapter will therefore call the modern TDLib C JSON API through a narrowly scoped FFI module, keeping all unsafe code and C-string handling inside that boundary. The FFI layer will expose safe Rust operations and owned JSON strings to the rest of the application. TDLib itself will be built and packaged separately from the GTK application, pinned to an explicit upstream revision. Before enabling the runtime in normal builds, verify:
+The native dispatcher will call TDLib's preferred client-ID C JSON API through a narrowly scoped FFI module, keeping all unsafe code and C-string handling inside that boundary. The FFI layer will expose safe client-ID allocation, request sending and one owned receive-dispatcher operation; account workers will consume routed mailboxes. TDLib itself will be built and packaged separately from the GTK application, pinned to an explicit upstream revision. Before enabling the runtime in normal builds, verify:
 - Reproducible TDLib builds for each supported Linux architecture.
 - Native package and Flatpak integration, including library discovery and runtime dependencies.
 - The exported `td_create_client_id`, `td_send`, and `td_receive` symbols in the packaged library.
-- Client ownership, ordered update delivery, request correlation, cancellation and shutdown.
+- Client-ID ownership, one process-wide receive dispatcher, ordered mailbox routing, request correlation, cancellation and shutdown.
 - License compatibility and the upstream security/update process.
 
 The `tdlib-rs` build modes are not a shortcut around this packaging work: its download mode fetches a release archive during Cargo builds, its dynamic mode uses a build-output RPATH, and its static mode requires additional C++ runtime libraries on Linux.

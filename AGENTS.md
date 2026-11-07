@@ -27,7 +27,7 @@ The repository now contains an initial GTK4/libadwaita application shell and a d
 - Keep network and file operations asynchronous; never block the GTK main thread.
 - Keep the TDLib JSON receive stream single-owner: one process-wide dispatcher calls `td_receive`, routes owned messages by `@client_id`, and preserves arrival order. Account workers consume only their own mailboxes. Treat a timeout as no message, not as a closed client.
 - Model authorization-state changes and TDLib errors as application-owned events. Preserve unknown future authorization states rather than panicking or silently coercing them.
-- Treat a close request and TDLib's `authorizationStateClosed` confirmation as separate lifecycle steps. Do not destroy the native client before confirmation; surface transport failures distinctly from clean shutdown.
+- Treat a close request and TDLib's `authorizationStateClosed` confirmation as separate lifecycle steps. Do not mark an account closed or release its routing state before confirmation; the preferred TDLib client-ID API automatically destroys the client after closure. Surface transport failures distinctly from clean shutdown.
 - Treat TDLib's actual API and documented server capabilities as authoritative. Do not promise unsupported concurrency, transfer acceleration, privacy bypasses, or server-side Premium entitlements.
 - Keep UI components accessible: keyboard navigation, screen-reader labels, scalable layouts, reduced-motion considerations and RTL support.
 - Follow GNOME Human Interface Guidelines where appropriate without making the application unusable on non-GNOME desktops.
