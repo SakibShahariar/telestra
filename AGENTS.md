@@ -25,6 +25,9 @@ The repository now contains an initial GTK4/libadwaita application shell and a d
 - Keep the application's `unsafe_code = "forbid"` lint in force. Put TDLib C ABI declarations, pointer ownership and C-string conversion in a dedicated, narrowly scoped FFI crate; expose only safe Rust operations and owned response strings to the application crate.
 - The TDLib receive pointer is borrowed only until the next receive/execute call on that thread. Copy it into owned memory immediately, and ensure exactly one receive loop per client applies all responses and updates in arrival order.
 - Keep network and file operations asynchronous; never block the GTK main thread.
+- Keep the TDLib JSON transport single-owner: one receive loop per client, owned response strings, and preserved receive order. Treat a timeout as no message, not as a closed client.
+- Model authorization-state changes and TDLib errors as application-owned events. Preserve unknown future authorization states rather than panicking or silently coercing them.
+- Treat a close request and TDLib's `authorizationStateClosed` confirmation as separate lifecycle steps. Do not destroy the native client before confirmation; surface transport failures distinctly from clean shutdown.
 - Treat TDLib's actual API and documented server capabilities as authoritative. Do not promise unsupported concurrency, transfer acceleration, privacy bypasses, or server-side Premium entitlements.
 - Keep UI components accessible: keyboard navigation, screen-reader labels, scalable layouts, reduced-motion considerations and RTL support.
 - Follow GNOME Human Interface Guidelines where appropriate without making the application unusable on non-GNOME desktops.
