@@ -4,7 +4,7 @@
 
 Telestra is an independent, native Linux Telegram client built with Rust, GTK4, libadwaita and TDLib. The product should feel at home on GNOME while remaining usable on other Linux desktops.
 
-The project is in its initial planning stage. Do not describe planned functionality as implemented, and do not introduce scaffolding that implies an application already exists.
+The repository now contains an initial GTK4/libadwaita application shell and a documented architecture, but Telegram connectivity, authentication and messaging are not implemented. Keep all status claims aligned with the actual code; do not describe planned functionality as implemented.
 
 ## Working rules
 
