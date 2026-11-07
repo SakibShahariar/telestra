@@ -68,8 +68,11 @@ pub enum BackendEvent {
     Update { json: String },
     /// A decoded authorization-state transition.
     AuthorizationStateChanged(AuthorizationState),
-    /// A TDLib `error` response.
-    Error(TdlibError),
+    /// A TDLib `error` response, correlated when its `@extra` is valid.
+    Error {
+        request_id: Option<RequestId>,
+        error: TdlibError,
+    },
     /// The native JSON transport failed and the client can no longer progress.
     TransportFailed(TransportError),
 }
@@ -109,6 +112,22 @@ mod tests {
         let error = TdlibError::new(400, "Invalid request");
         assert_eq!(error.code(), 400);
         assert_eq!(error.message(), "Invalid request");
+    }
+
+    #[test]
+    fn tdlib_error_event_keeps_request_correlation() {
+        let event = BackendEvent::Error {
+            request_id: Some(RequestId::new(23)),
+            error: TdlibError::new(400, "Invalid request"),
+        };
+
+        assert_eq!(
+            event,
+            BackendEvent::Error {
+                request_id: Some(RequestId::new(23)),
+                error: TdlibError::new(400, "Invalid request")
+            }
+        );
     }
 
     #[test]
