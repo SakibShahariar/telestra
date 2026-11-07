@@ -20,7 +20,7 @@ jobs:
       - name: Install native development dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgtk-4-dev libadwaita-1-dev pkg-config xvfb dbus-daemon
+          sudo apt-get install --yes libgtk-4-dev libadwaita-1-dev pkg-config xvfb dbus-daemon xdotool
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -38,11 +38,27 @@ jobs:
 
       - name: Smoke test GTK application startup
         run: |
-          set +e
-          xvfb-run -a dbus-run-session -- timeout --signal=TERM --kill-after=2s 10s cargo run --locked
-          status=$?
-          if [ "$status" -ne 124 ]; then
-            echo "Application exited before the smoke-test timeout (status: $status)."
-            exit "$status"
-          fi
+          xvfb-run -a dbus-run-session -- bash -euo pipefail -c '
+            cargo run --locked > /tmp/telestra-smoke.log 2>&1 &
+            app_pid=$!
+            cleanup() {
+              kill "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+            }
+            trap cleanup EXIT
+            for _ in $(seq 1 20); do
+              if xdotool search --onlyvisible --name "^Telestra$" >/dev/null 2>&1; then
+                echo "Telestra window appeared."
+                exit 0
+              fi
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                cat /tmp/telestra-smoke.log
+                exit 1
+              fi
+              sleep 1
+            done
+            cat /tmp/telestra-smoke.log
+            echo "Telestra window did not appear."
+            exit 1
+          '
 
