@@ -65,13 +65,16 @@ pub struct ClientMailboxRegistry {
 impl ClientMailboxRegistry {
     /// Registers a client and returns the receiver owned by its account worker.
     pub fn register(&mut self, client_id: i32) -> Result<Receiver<String>, DispatchError> {
-        if self.mailboxes.contains_key(&client_id) {
-            return Err(DispatchError::DuplicateClient(client_id));
+        match self.mailboxes.entry(client_id) {
+            std::collections::btree_map::Entry::Occupied(_) => {
+                Err(DispatchError::DuplicateClient(client_id))
+            }
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                let (sender, receiver) = mpsc::channel();
+                entry.insert(sender);
+                Ok(receiver)
+            }
         }
-
-        let (sender, receiver) = mpsc::channel();
-        self.mailboxes.insert(client_id, sender);
-        Ok(receiver)
     }
 
     /// Routes an owned TDLib JSON message using its @client_id field.
