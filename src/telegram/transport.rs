@@ -142,9 +142,7 @@ mod tests {
     #[test]
     fn transport_close_is_explicit_and_does_not_discard_messages() {
         let mut transport = ScriptedTransport {
-            incoming: vec!["authorizationStateClosing".to_owned()]
-                .into_iter()
-                .collect(),
+            incoming: std::iter::once("authorizationStateClosing".to_owned()).collect(),
             ..Default::default()
         };
 
