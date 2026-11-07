@@ -6,8 +6,8 @@
 //! It never touches GTK; consumers must forward events to the GLib main context.
 
 use super::{
-    AuthorizationState, BackendEvent, ClientLifecycle, ClientState, DecodedMessage,
-    EventRouter, JsonTransport, RequestId, TransportError, decode_message,
+    AuthorizationState, BackendEvent, ClientLifecycle, ClientState, DecodedMessage, EventRouter,
+    JsonTransport, RequestId, TransportError, decode_message,
 };
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
