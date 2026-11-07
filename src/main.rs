@@ -2,7 +2,7 @@ use adw::prelude::*;
 use gtk::glib;
 
 mod app;
-mod telegram;
+pub mod telegram;
 
 fn main() -> glib::ExitCode {
     let application = adw::Application::builder()
