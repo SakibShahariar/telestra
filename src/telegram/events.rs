@@ -166,6 +166,7 @@ mod tests {
     use super::{AuthorizationState, BackendEvent, TdlibError};
     use crate::telegram::{RequestId, TransportError, TransportOperation};
 
+
     #[test]
     fn event_router_correlates_response_and_preserves_unmatched_operations() {
         use super::EventRouter;
