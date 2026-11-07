@@ -7,10 +7,13 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use super::{DecodeError, decode_envelope};
+use super::{
+    DecodeError, JsonTransport, TransportError, TransportOperation, decode_envelope,
+};
 
 /// A failure while routing a message from TDLib's shared receive stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -221,6 +224,80 @@ mod tests {
     }
 }
 
+
+/// Thread-safe sender for requests addressed to a TDLib client ID.
+///
+/// The native implementation wraps td_send(client_id, request). It must keep
+/// all FFI pointer conversion and native error handling inside that boundary.
+pub trait ClientRequestSender: Send + Sync + 'static {
+    /// Sends one JSON request to the selected TDLib client.
+    fn send_request(&self, client_id: i32, request: &str) -> Result<(), String>;
+}
+
+/// A worker-facing transport backed by one account mailbox and client ID.
+pub struct AccountMailboxTransport<S: ClientRequestSender> {
+    client_id: i32,
+    sender: Arc<S>,
+    mailbox: Receiver<String>,
+    close_requested: bool,
+}
+
+impl<S: ClientRequestSender> AccountMailboxTransport<S> {
+    /// Connects a worker transport to its shared-dispatcher mailbox.
+    pub fn new(client_id: i32, sender: Arc<S>, mailbox: Receiver<String>) -> Self {
+        Self {
+            client_id,
+            sender,
+            mailbox,
+            close_requested: false,
+        }
+    }
+
+    /// Returns the TDLib client ID used for outgoing requests.
+    pub const fn client_id(&self) -> i32 {
+        self.client_id
+    }
+}
+
+impl<S: ClientRequestSender> JsonTransport for AccountMailboxTransport<S> {
+    fn send(&mut self, request: &str) -> Result<(), TransportError> {
+        if self.close_requested {
+            return Err(TransportError::new(
+                TransportOperation::Send,
+                "account transport is closing",
+            ));
+        }
+        self.sender
+            .send_request(self.client_id, request)
+            .map_err(|message| TransportError::new(TransportOperation::Send, message))
+    }
+
+    fn receive(
+        &mut self,
+        timeout: Duration,
+    ) -> Result<Option<String>, TransportError> {
+        match self.mailbox.recv_timeout(timeout) {
+            Ok(message) => Ok(Some(message)),
+            Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(TransportError::new(
+                TransportOperation::Receive,
+                "account mailbox disconnected",
+            )),
+        }
+    }
+
+    fn close(&mut self) -> Result<(), TransportError> {
+        if self.close_requested {
+            return Ok(());
+        }
+        self.sender
+            .send_request(self.client_id, r#"{"@type":"close"}"#)
+            .map_err(|message| TransportError::new(TransportOperation::Close, message))?;
+        self.close_requested = true;
+        Ok(())
+    }
+}
+
 /// Native receive source owned by the process-wide dispatcher thread.
 ///
 /// A TDLib implementation must be the sole caller of the process-global
@@ -349,6 +426,69 @@ mod shared_dispatcher_tests {
     use super::{DispatchError, SharedDispatcher, SharedReceiveSource};
     use std::sync::mpsc;
     use std::time::Duration;
+
+
+    #[derive(Default)]
+    struct RecordingSender {
+        sent: std::sync::Mutex<Vec<(i32, String)>>,
+    }
+
+    impl super::ClientRequestSender for RecordingSender {
+        fn send_request(&self, client_id: i32, request: &str) -> Result<(), String> {
+            self.sent
+                .lock()
+                .unwrap()
+                .push((client_id, request.to_owned()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn account_transport_sends_with_client_id_and_receives_from_its_mailbox() {
+        use super::AccountMailboxTransport;
+        use crate::telegram::JsonTransport;
+        use std::sync::Arc;
+
+        let sender = Arc::new(RecordingSender::default());
+        let (mailbox_sender, mailbox_receiver) = mpsc::channel();
+        let mut transport = AccountMailboxTransport::new(53, Arc::clone(&sender), mailbox_receiver);
+
+        transport.send(r#"{"@type":"getMe"}"#).unwrap();
+        mailbox_sender
+            .send(r#"{"@type":"user","@client_id":53}"#.to_owned())
+            .unwrap();
+
+        assert_eq!(transport.client_id(), 53);
+        assert_eq!(
+            transport.receive(Duration::from_secs(1)).unwrap(),
+            Some(r#"{"@type":"user","@client_id":53}"#.to_owned())
+        );
+        assert_eq!(
+            *sender.sent.lock().unwrap(),
+            vec![(53, r#"{"@type":"getMe"}"#.to_owned())]
+        );
+    }
+
+    #[test]
+    fn account_transport_sends_close_once_and_rejects_later_requests() {
+        use super::AccountMailboxTransport;
+        use crate::telegram::{JsonTransport, TransportOperation};
+        use std::sync::Arc;
+
+        let sender = Arc::new(RecordingSender::default());
+        let (_mailbox_sender, mailbox_receiver) = mpsc::channel();
+        let mut transport = AccountMailboxTransport::new(59, Arc::clone(&sender), mailbox_receiver);
+
+        transport.close().unwrap();
+        transport.close().unwrap();
+        let error = transport.send(r#"{"@type":"getMe"}"#).unwrap_err();
+
+        assert_eq!(error.operation(), TransportOperation::Send);
+        assert_eq!(
+            *sender.sent.lock().unwrap(),
+            vec![(59, r#"{"@type":"close"}"#.to_owned())]
+        );
+    }
 
     struct ChannelSource {
         incoming: mpsc::Receiver<String>,
