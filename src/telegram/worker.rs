@@ -9,8 +9,8 @@ use super::{
     AuthorizationState, BackendEvent, ClientLifecycle, ClientState, DecodedMessage, EventRouter,
     JsonTransport, RequestId, TransportError, decode_message,
 };
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::Mutex;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -45,9 +45,7 @@ pub enum WorkerEvent {
         error: TransportError,
     },
     /// A received message could not be decoded as a TDLib JSON envelope.
-    ProtocolFailed {
-        message: String,
-    },
+    ProtocolFailed { message: String },
     /// An operation remained pending when the worker became unusable or closed.
     PendingFailed {
         request_id: RequestId,
@@ -286,11 +284,7 @@ fn fail_worker(
     fail_pending(router, events, &reason);
 }
 
-fn fail_pending(
-    router: &mut EventRouter<String>,
-    events: &Sender<WorkerEvent>,
-    reason: &str,
-) {
+fn fail_pending(router: &mut EventRouter<String>, events: &Sender<WorkerEvent>, reason: &str) {
     for (request_id, operation) in router.drain_pending() {
         let _ = events.send(WorkerEvent::PendingFailed {
             request_id,
@@ -466,7 +460,10 @@ mod tests {
         worker.shutdown().unwrap();
 
         assert!(matches!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::Backend {
                 event: crate::telegram::BackendEvent::AuthorizationStateChanged(
                     AuthorizationState::Closed
@@ -499,13 +496,15 @@ mod tests {
         };
         let worker = BackendWorker::spawn(transport).unwrap();
         worker.shutdown().unwrap();
-        assert!(worker
-            .send_request(
-                RequestId::new(76),
-                "late-request",
-                r#"{"@type":"getMe","@extra":"telestra:76"}"#,
-            )
-            .is_err());
+        assert!(
+            worker
+                .send_request(
+                    RequestId::new(76),
+                    "late-request",
+                    r#"{"@type":"getMe","@extra":"telestra:76"}"#,
+                )
+                .is_err()
+        );
         assert!(matches!(
             worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
             WorkerEvent::Backend {
