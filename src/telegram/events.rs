@@ -119,9 +119,7 @@ impl<T> EventRouter<T> {
     /// updates and authorization transitions never consume pending requests.
     pub fn route_decoded_message(&mut self, message: DecodedMessage) -> RoutedBackendEvent<T> {
         match message {
-            DecodedMessage::Response { extra, json } => {
-                self.route_response(extra.as_deref(), json)
-            }
+            DecodedMessage::Response { extra, json } => self.route_response(extra.as_deref(), json),
             DecodedMessage::Error { extra, error } => self.route_error(extra.as_deref(), error),
             DecodedMessage::Update { json } => self.route_update(json),
             DecodedMessage::AuthorizationStateChanged(state) => {
@@ -199,7 +197,10 @@ mod tests {
         });
 
         assert!(matches!(routed.event(), BackendEvent::Response { .. }));
-        assert_eq!(routed.take_completed_request(), Some((request_id, "send-message")));
+        assert_eq!(
+            routed.take_completed_request(),
+            Some((request_id, "send-message"))
+        );
         assert_eq!(router.pending_len(), 0);
     }
 
@@ -218,7 +219,10 @@ mod tests {
         });
 
         assert!(matches!(routed.event(), BackendEvent::Error { .. }));
-        assert_eq!(routed.take_completed_request(), Some((request_id, "load-chats")));
+        assert_eq!(
+            routed.take_completed_request(),
+            Some((request_id, "load-chats"))
+        );
         assert_eq!(router.pending_len(), 0);
     }
 
