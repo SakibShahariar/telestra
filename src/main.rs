@@ -1,3 +1,4 @@
+use adw::prelude::*;
 use gtk::glib;
 
 mod app;
