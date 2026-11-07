@@ -62,3 +62,8 @@ Do not enable a native runtime dependency until the pinned TDLib source has been
 The transport-independent dispatcher is implemented as `SharedDispatcher`. It owns a dedicated thread and a `SharedReceiveSource`; only that thread polls the source. The source contract requires bounded receives and owned message strings, allowing the native TDLib adapter to copy its borrowed C response before polling again.
 
 Account registration is serialized through dispatcher commands. Each account receives a dedicated FIFO mailbox, and routing failures or native receive failures are surfaced through the dispatcher's event receiver rather than silently discarded. The abstraction is tested with a channel-backed source; it is not yet connected to TDLib's native C ABI.
+
+
+## Account worker transport
+
+`AccountMailboxTransport` connects the existing account worker to a registered mailbox and a client-ID-aware request sender. It routes outgoing requests through the sender with the account's TDLib client ID, consumes only that account's mailbox, and sends the TDLib `close` request once when the worker begins shutdown. The sender and shared receive source are injected interfaces; neither is a native TDLib implementation yet.
