@@ -77,7 +77,6 @@ pub enum BackendEvent {
     TransportFailed(TransportError),
 }
 
-
 /// One decoded backend event plus the application operation it completes, if any.
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoutedBackendEvent<T> {
@@ -114,14 +113,10 @@ impl<T> EventRouter<T> {
     }
 
     /// Routes a response and completes only the operation matching its @extra.
-    pub fn route_response(
-        &mut self,
-        extra: Option<&str>,
-        json: String,
-    ) -> RoutedBackendEvent<T> {
+    pub fn route_response(&mut self, extra: Option<&str>, json: String) -> RoutedBackendEvent<T> {
         let request_id = extra.and_then(RequestId::from_extra);
-        let completed_request = request_id
-            .and_then(|id| self.pending.resolve(id).map(|operation| (id, operation)));
+        let completed_request =
+            request_id.and_then(|id| self.pending.resolve(id).map(|operation| (id, operation)));
         RoutedBackendEvent {
             event: BackendEvent::Response { request_id, json },
             completed_request,
@@ -129,14 +124,10 @@ impl<T> EventRouter<T> {
     }
 
     /// Routes a TDLib error and completes only the operation matching its @extra.
-    pub fn route_error(
-        &mut self,
-        extra: Option<&str>,
-        error: TdlibError,
-    ) -> RoutedBackendEvent<T> {
+    pub fn route_error(&mut self, extra: Option<&str>, error: TdlibError) -> RoutedBackendEvent<T> {
         let request_id = extra.and_then(RequestId::from_extra);
-        let completed_request = request_id
-            .and_then(|id| self.pending.resolve(id).map(|operation| (id, operation)));
+        let completed_request =
+            request_id.and_then(|id| self.pending.resolve(id).map(|operation| (id, operation)));
         RoutedBackendEvent {
             event: BackendEvent::Error { request_id, error },
             completed_request,
@@ -152,10 +143,7 @@ impl<T> EventRouter<T> {
     }
 
     /// Routes an authorization-state update without consuming a pending request.
-    pub fn route_authorization_state(
-        &self,
-        state: AuthorizationState,
-    ) -> RoutedBackendEvent<T> {
+    pub fn route_authorization_state(&self, state: AuthorizationState) -> RoutedBackendEvent<T> {
         RoutedBackendEvent {
             event: BackendEvent::AuthorizationStateChanged(state),
             completed_request: None,
@@ -163,9 +151,7 @@ impl<T> EventRouter<T> {
     }
 
     /// Drains all operations still pending when the worker stops.
-    pub fn drain_pending(
-        &mut self,
-    ) -> std::collections::btree_map::IntoIter<RequestId, T> {
+    pub fn drain_pending(&mut self) -> std::collections::btree_map::IntoIter<RequestId, T> {
         self.pending.drain()
     }
 
@@ -191,10 +177,8 @@ mod tests {
         router.register(first, "first");
         router.register(second, "second");
 
-        let mut response = router.route_response(
-            Some(&second.to_extra()),
-            "{\"@type\":\"ok\"}".to_owned(),
-        );
+        let mut response =
+            router.route_response(Some(&second.to_extra()), "{\"@type\":\"ok\"}".to_owned());
         assert_eq!(
             response.event(),
             &BackendEvent::Response {
@@ -209,7 +193,10 @@ mod tests {
         assert!(matches!(update.event(), BackendEvent::Update { .. }));
         assert_eq!(update.take_completed_request(), None);
         assert_eq!(router.pending_len(), 1);
-        assert_eq!(router.drain_pending().collect::<Vec<_>>(), vec![(first, "first")]);
+        assert_eq!(
+            router.drain_pending().collect::<Vec<_>>(),
+            vec![(first, "first")]
+        );
     }
 
     #[test]
@@ -220,10 +207,8 @@ mod tests {
         let mut router = EventRouter::default();
         router.register(request_id, "pending");
 
-        let mut unknown = router.route_error(
-            Some("foreign:44"),
-            TdlibError::new(400, "Invalid request"),
-        );
+        let mut unknown =
+            router.route_error(Some("foreign:44"), TdlibError::new(400, "Invalid request"));
         assert_eq!(
             unknown.event(),
             &BackendEvent::Error {
@@ -250,10 +235,7 @@ mod tests {
         use super::EventRouter;
 
         let mut router = EventRouter::<()>::default();
-        let event = router.route_response(
-            Some("telestra:999"),
-            "{\"@type\":\"ok\"}".to_owned(),
-        );
+        let event = router.route_response(Some("telestra:999"), "{\"@type\":\"ok\"}".to_owned());
         assert_eq!(
             event.event(),
             &BackendEvent::Response {
