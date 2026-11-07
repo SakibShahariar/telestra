@@ -27,6 +27,36 @@ impl RequestId {
     }
 }
 
+/// Generates unique request identifiers without wrapping on exhaustion.
+///
+/// Keep one sequence per TDLib client. A fresh sequence starts at 1; if the
+/// integer space is exhausted, generation stops rather than reusing an ID
+/// that could still identify an in-flight request.
+#[derive(Debug, Clone)]
+pub struct RequestIdSequence {
+    next: Option<u64>,
+}
+
+impl Default for RequestIdSequence {
+    fn default() -> Self {
+        Self { next: Some(1) }
+    }
+}
+
+impl RequestIdSequence {
+    /// Creates a sequence whose first generated identifier has the given value.
+    pub const fn starting_at(first: u64) -> Self {
+        Self { next: Some(first) }
+    }
+
+    /// Returns the next unique identifier, or None after integer exhaustion.
+    pub fn next_id(&mut self) -> Option<RequestId> {
+        let value = self.next?;
+        self.next = value.checked_add(1);
+        Some(RequestId::new(value))
+    }
+}
+
 /// Tracks application operations that are waiting for TDLib responses.
 ///
 /// The owner should insert an operation before sending its request and resolve
@@ -73,12 +103,30 @@ impl<T> PendingRequests<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{PendingRequests, RequestId};
+    use super::{PendingRequests, RequestId, RequestIdSequence};
 
     #[test]
     fn request_id_round_trips_through_extra() {
         let id = RequestId::new(42);
         assert_eq!(RequestId::from_extra(&id.to_extra()), Some(id));
+    }
+
+    #[test]
+    fn request_sequence_generates_distinct_ids() {
+        let mut sequence = RequestIdSequence::default();
+        let first = sequence.next_id().unwrap();
+        let second = sequence.next_id().unwrap();
+        assert_ne!(first, second);
+        assert_eq!(first, RequestId::new(1));
+        assert_eq!(second, RequestId::new(2));
+    }
+
+    #[test]
+    fn request_sequence_stops_instead_of_wrapping() {
+        let mut sequence = RequestIdSequence::starting_at(u64::MAX);
+        assert_eq!(sequence.next_id(), Some(RequestId::new(u64::MAX)));
+        assert_eq!(sequence.next_id(), None);
+        assert_eq!(sequence.next_id(), None);
     }
 
     #[test]
