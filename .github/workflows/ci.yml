@@ -27,6 +27,9 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Generate Cargo lockfile for reproducibility audit
+        run: cargo generate-lockfile && cat Cargo.lock
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
