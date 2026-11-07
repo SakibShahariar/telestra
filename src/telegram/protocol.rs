@@ -32,7 +32,7 @@ impl RequestId {
 /// Keep one sequence per TDLib client. A fresh sequence starts at 1; if the
 /// integer space is exhausted, generation stops rather than reusing an ID
 /// that could still identify an in-flight request.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RequestIdSequence {
     next: Option<u64>,
 }
@@ -90,6 +90,15 @@ impl<T> PendingRequests<T> {
     /// Malformed, foreign or unknown values leave all pending operations intact.
     pub fn resolve_extra(&mut self, extra: &str) -> Option<T> {
         RequestId::from_extra(extra).and_then(|id| self.resolve(id))
+    }
+
+    /// Removes every pending operation, returning them in request-ID order.
+    ///
+    /// The adapter should use this when a client shuts down or its receive loop
+    /// terminates, so callers can be notified that their operations were
+    /// interrupted instead of leaving them pending forever.
+    pub fn drain(&mut self) -> std::collections::btree_map::IntoIter<RequestId, T> {
+        std::mem::take(&mut self.entries).into_iter()
     }
 
     /// Returns whether an operation is waiting for the given response.
@@ -186,6 +195,20 @@ mod tests {
         assert_eq!(pending.resolve_extra("foreign:9"), None);
         assert_eq!(pending.resolve_extra("telestra:not-a-number"), None);
         assert!(pending.contains(known));
+    }
+
+    #[test]
+    fn draining_pending_operations_returns_all_and_empties_collection() {
+        let first = RequestId::new(2);
+        let second = RequestId::new(5);
+        let mut pending = PendingRequests::new();
+        pending.insert(second, "second");
+        pending.insert(first, "first");
+
+        let drained: Vec<_> = pending.drain().collect();
+        assert_eq!(drained, vec![(first, "first"), (second, "second")]);
+        assert!(pending.is_empty());
+        assert_eq!(pending.len(), 0);
     }
 
     #[test]
