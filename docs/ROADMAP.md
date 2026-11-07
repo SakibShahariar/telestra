@@ -8,8 +8,9 @@ This roadmap describes intended areas of work. It is not a promise that every it
 - [x] Record contributor and repository-agent guidance.
 - [x] Define the TDLib JSON interface boundary and document the Rust transport candidates; final wrapper choice awaits a build/runtime spike.
 - [x] Establish Rust, GTK4 and libadwaita Rust-binding version targets.
-- [ ] Add a minimal application skeleton and reproducible development environment (initial shell and manifest added; build validation pending).
-- [ ] Add formatting, linting, tests and CI (workflow added; first successful run pending).
+- [ ] Integrate the TDLib JSON runtime and native-library packaging strategy ([#145](https://github.com/SakibShahariar/telestra/issues/145)).
+- [x] Add a minimal application skeleton and reproducible development environment (GTK4/libadwaita shell compiles; CI validation passed).
+- [x] Add formatting, linting, tests and CI (formatting, Clippy and tests passed in CI run #13).
 
 ## Stage 1 — Essential Telegram client
 
