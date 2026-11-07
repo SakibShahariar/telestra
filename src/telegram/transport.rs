@@ -1,9 +1,10 @@
-//! A narrow, testable boundary for TDLib's asynchronous JSON transport.
+//! A narrow, testable boundary for one account's TDLib message mailbox.
 //!
-//! The concrete implementation will wrap the client-scoped
-//! `td_json_client_*` C API. This trait deliberately models one owned client:
-//! mutable access to `receive` prevents callers from polling the same client
-//! concurrently, and each returned message is an owned Rust string.
+//! TDLib's preferred client-ID JSON API has one process-wide `td_receive`
+//! stream. A separate dispatcher must own that native call and route messages
+//! by `@client_id`; this trait models the per-account mailbox after routing.
+//! Mutable access to `receive` prevents concurrent consumers of that mailbox,
+//! and each returned message is an owned Rust string.
 
 use std::fmt;
 use std::time::Duration;
@@ -51,12 +52,12 @@ impl fmt::Display for TransportError {
 
 impl std::error::Error for TransportError {}
 
-/// One client-scoped TDLib JSON transport.
+/// One account-scoped mailbox over TDLib's shared JSON receive stream.
 ///
-/// Implementations must preserve TDLib's message order. `receive` must return
-/// an owned string because TDLib's C API invalidates its borrowed response
-/// pointer on a later receive/execute call. A runtime must have exactly one
-/// receive-loop owner per client.
+/// Implementations must preserve the order in which the process-wide TDLib
+/// dispatcher routed messages to this account. `receive` returns an owned
+/// string; the dispatcher must copy TDLib's borrowed C pointer before its next
+/// native receive call. Only that dispatcher may call `td_receive`.
 pub trait JsonTransport: Send + 'static {
     /// Sends one complete JSON request to the owned TDLib client.
     fn send(&mut self, request: &str) -> Result<(), TransportError>;

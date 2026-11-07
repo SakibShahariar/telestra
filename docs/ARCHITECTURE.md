@@ -19,12 +19,21 @@ UI components should not construct raw TDLib requests directly. The adapter shou
 
 **Protocol boundary: TDLib JSON interface.** TDLib's official documentation recommends the JSON interface for most use cases and describes the API as fully asynchronous. Requests and responses are correlated with the `@extra` field, while updates carry essential state changes. The adapter must therefore own request correlation, update dispatch, error conversion and orderly shutdown; none of these details belong in GTK widgets.
 
-**Rust transport implementation: use a small audited FFI boundary around TDLib's modern client-scoped JSON API.** The `tdlib-rs 1.4.0` crate was investigated but is not selected for the runtime. Its public API exposes a process-wide `receive()` function and client IDs; a downstream integration example describes the underlying calls as `td_send` / `td_receive`. Those are the older global JSON interface, which TDLib documents as deprecated for removal in TDLib 2.0.0. This conflicts with Telestra's requirement to own one receive loop per client using `td_json_client_create/send/receive/destroy`. The crate may still be useful as a reference for generated types, but it must not become the runtime dependency unless a modern client-scoped implementation is verified.
+**C ABI decision: use TDLib's preferred client-ID JSON interface, not its deprecated client-scoped wrapper.** Inspection of `td/telegram/td_json_client.h` at the pinned TDLib commit shows that the primary interface is `td_create_client_id`, `td_send`, and process-wide `td_receive`. The header explicitly labels `td_json_client_create/send/receive/destroy` as the old alternative interface and says it will be removed in TDLib 2.0.0. The earlier architecture note had these roles reversed; do not implement or link the deprecated `td_json_client_*` API.
+
+The preferred API changes the receive topology: TDLib exposes one process-wide incoming stream, not an independent receive queue per account. Telestra must have exactly one native receive dispatcher for the process. That dispatcher owns calls to `td_receive`, copies each borrowed C string immediately, preserves arrival order, reads `@client_id`, and forwards each event to the matching account's mailbox. Account workers may remain isolated and single-consumer, but their `receive` operation reads from those mailboxes; it must never call TDLib's global `td_receive` itself. Requests are sent with `td_send(client_id, json)`. TDLib destroys a client automatically after it is closed, so do not call the deprecated interface's `td_json_client_destroy`.
+
+The `tdlib-rs 1.4.0` crate is not selected for the runtime until its process-wide dispatcher and client lifecycle can be audited against this topology. A small FFI boundary should expose safe client-ID allocation, request sending, and a single receive-dispatcher API, with all unsafe code and C-string handling isolated there. TDLib itself will be built and packaged separately from the GTK application, pinned to an explicit upstream revision. Before enabling the runtime in normal builds, verify:
+- Reproducible TDLib builds for each supported Linux architecture.
+- Native package and Flatpak integration, including library discovery and runtime dependencies.
+- The exported `td_create_client_id`, `td_send`, and `td_receive` symbols in the packaged library.
+- One process-wide receive owner, ordered event routing by `@client_id`, request correlation, and orderly close behavior.
+- License compatibility and the upstream security/update process.
 
 The adapter will therefore call the modern TDLib C JSON API through a narrowly scoped FFI module, keeping all unsafe code and C-string handling inside that boundary. The FFI layer will expose safe Rust operations and owned JSON strings to the rest of the application. TDLib itself will be built and packaged separately from the GTK application, pinned to an explicit upstream revision. Before enabling the runtime in normal builds, verify:
 - Reproducible TDLib builds for each supported Linux architecture.
 - Native package and Flatpak integration, including library discovery and runtime dependencies.
-- The exact exported `td_json_client_*` symbols in the packaged library.
+- The exported `td_create_client_id`, `td_send`, and `td_receive` symbols in the packaged library.
 - Client ownership, ordered update delivery, request correlation, cancellation and shutdown.
 - License compatibility and the upstream security/update process.
 
@@ -45,22 +54,30 @@ The upstream build documentation identifies a C++17 compiler, OpenSSL, zlib, CMa
 Before treating this direction as final:
 - Pin an exact TDLib commit and record the resolved source archive checksum.
 - Build the JSON shared library for x86_64 and aarch64 using the same documented options.
-- Verify the output exports every required td_json_client_* symbol and record its runtime dependencies.
+- Verify the output exports `td_create_client_id`, `td_send`, and `td_receive`, and record its runtime dependencies.
 - Verify that the Flatpak build is network-independent after source acquisition and installs the library under the app's controlled runtime path.
 - Run a clean CI link-and-start test against the produced library, plus a package-level smoke test for both architectures.
 - Decide whether native distributions should prefer their system TDLib package or bundle the pinned library only after ABI and symbol compatibility are checked.
 
 Until those checks pass, this is a packaging direction, not a completed integration or a claim that a TDLib runtime can already be built by CI.
 
-### JSON client lifecycle requirements
+### Preferred JSON API and receive topology
 
-Use the client-scoped `td_json_client_*` API (`create`, `send`, `receive`, and `destroy`) rather than the older global `td_create_client_id` / `td_send` / `td_receive` interface. The older interface is documented as deprecated for removal in TDLib 2.0.0.
+Use the preferred client-ID interface from the pinned TDLib header:
 
-- Give each TDLib client one receive loop on a dedicated worker. TDLib forbids concurrent calls to receive for the same client; the worker must preserve the order in which responses and updates arrive.
-- Copy each returned C string into owned Rust memory before the next receive call, because TDLib invalidates the returned pointer on the next receive/execute call on that thread.
+- `int td_create_client_id(void)` allocates an account client ID.
+- `void td_send(int client_id, const char *request)` sends a request for that account.
+- `const char *td_receive(double timeout)` receives the next event for any client.
+- `const char *td_execute(const char *request)` is reserved for requests TDLib explicitly documents as synchronously executable.
+
+The `td_json_client_create/send/receive/execute/destroy` family is explicitly described in that header as the old alternative interface and is scheduled for removal in TDLib 2.0.0. Do not use it.
+
+- Run exactly one process-wide native receive dispatcher. TDLib forbids simultaneous calls to `td_receive`; per-account workers must never call it directly.
+- The dispatcher copies each returned C string into owned Rust memory before the next `td_receive` or `td_execute` call, parses `@client_id`, and forwards the message to the matching account mailbox. Preserve global receive order while routing.
+- Each account worker may own a single-consumer mailbox transport and send through a client-ID-bound sender. Its receive operation is mailbox consumption, not a native TDLib receive call.
 - Attach a unique `@extra` value to every request that expects a response and route the matching response to the waiting application operation. Updates without a matching `@extra` remain ordered events, not failed requests.
-- Shutdown must send TDLib's `close` request, continue receiving until `updateAuthorizationState` reports `authorizationStateClosed`, and only then destroy the client and join the worker. Do not terminate the process while TDLib is still closing its local database.
-- GTK-facing events must cross a thread-safe channel and be dispatched on the GLib main context; no GTK objects may be touched by the receive worker.
+- Shutdown sends TDLib's `close` request with `td_send`, continues receiving through the shared dispatcher until `updateAuthorizationState` reports `authorizationStateClosed` for that client, and then releases account-side routing state. The preferred API destroys the TDLib client automatically after it is closed; do not call `td_json_client_destroy`.
+- GTK-facing events must cross a thread-safe channel and be dispatched on the GLib main context; no GTK objects may be touched by the native receive dispatcher or account workers.
 
 These constraints should shape the fake-transport tests before any live-account authentication is introduced.
 
@@ -114,7 +131,7 @@ Record further decisions here when supported by a small technical investigation 
 
 - [TDLib getting started](https://core.telegram.org/tdlib/getting-started) — asynchronous request/response flow, updates and authorization.
 - [TDLib documentation](https://core.telegram.org/tdlib/docs/) — JSON interface recommendation and API reference.
-- [tdlib-rs 1.4.0 API](https://docs.rs/tdlib-rs/1.4.0/tdlib_rs/) — investigated wrapper API; not selected because its public client/receive model does not match Telestra's required modern client-scoped runtime.
-- [TDLib JSON C header](https://github.com/tdlib/td/blob/master/td/telegram/td_json_client.h) — authoritative client-scoped JSON C ABI and legacy-interface status.
+- [tdlib-rs 1.4.0 API](https://docs.rs/tdlib-rs/1.4.0/tdlib_rs/) — investigated wrapper API; not selected until its process-wide receive dispatcher and client-ID routing are audited.
+- [Pinned TDLib JSON C header](https://github.com/tdlib/td/blob/0e88653dcbf4e44c73cb655a05b58cd749a91169/td/telegram/td_json_client.h) — authoritative API declarations and explicit status of the old `td_json_client_*` alternative.
 - [gtk4 Rust bindings](https://docs.rs/gtk4/latest/gtk4/) — GTK4 Rust API and application lifecycle.
 - [libadwaita Rust bindings](https://docs.rs/libadwaita/latest/libadwaita/) — libadwaita application and window patterns.

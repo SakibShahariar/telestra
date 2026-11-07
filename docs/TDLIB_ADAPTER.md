@@ -1,12 +1,12 @@
 # TDLib adapter implementation contract
 
-**Status:** Transport-independent protocol, JSnN envelope decoder, event routing, lifecycle primitives and a generic background worker are implemented and covered by unit tests. No native TDLib library is linked, and Telegram connectivity is not available.
+**Status:** Transport-independent protocol, JSON envelope decoder, event routing, lifecycle primitives and a generic background worker are implemented and covered by unit tests. No native TDLib library is linked, and Telegram connectivity is not available.
 
-## nwnership
+## Ownership
 
-aach Telestra account owns one client-scoped TDLib JSON client. The eventual native adapter must use `td_json_client_create`, `td_json_client_send`, `td_json_client_receive` and `td_json_client_destroy`. Do not use the deprecated process-global client-ID interface.
+Each Telestra account receives a client ID from `td_create_client_id`. The preferred API sends requests with `td_send(client_id, request)` and delivers all accounts' updates and responses through the process-wide `td_receive(timeout)` stream. The pinned header explicitly marks `td_json_client_*` as the old alternative interface, scheduled for removal in TDLib 2.0.0; do not use it.
 
-The `JsonTransport` trait in `src/telegram/transport.rs` is the Rust boundary for that client. It requires mutable access for sends, receives and close requests, returns owned response strings, and documents the single-receiver and message-order guarantees. The native implementation must copy the TDLib response bytes before calling receive or execute again.
+A single process-wide dispatcher must be the only caller of native `td_receive`. It copies each returned C string before the next receive call, preserves global arrival order, reads `@client_id`, and forwards the owned JSON message to the matching account's mailbox. The account-level `JsonTransport` is a logical mailbox transport, not a direct wrapper around a native per-client receive call. Account workers consume only their own mailbox and send through a client-ID-aware dispatcher. TDLib automatically destroys a client after it is closed; the deprecated interface's explicit `td_json_client_destroy` is not part of this design.
 
 ## Worker responsibilities
 
@@ -32,7 +32,7 @@ On shutdown, the worker must:
 2. Send TDLib's `close` request.
 3. Continue receiving and dispatching updates.
 4. Wait until the decoded authorization state is `authorizationStateClosed`.
-5. Mark the lifecycle `Closed`, destroy the native client exactly once, and join the worker.
+5. Mark the lifecycle `Closed` and release the account mailbox/routing state. TDLib automatically destroys the client after it is closed; the preferred API has no explicit destroy call.
 6. Resolve or fail all outstanding application operations.
 
 A transport error during shutdown must be surfaced and must not be misreported as a clean TDLib close. Tests must cover both the normal close confirmation and failure path.
@@ -54,4 +54,4 @@ The current tests cover the transport contract, request-ID generation and pendin
 
 ## Native build gate
 
-Do not enable a native runtime dependency until the pinned TDLib source has been built reproducibly for the supported architectures, the required client-scoped symbols and runtime dependencies have been inspected, and native-package plus Flatpak smoke tests pass. See [Architecture](ARCHITECTURE.md) for the candidate source pin and packaging checklist.
+Do not enable a native runtime dependency until the pinned TDLib source has been built reproducibly for the supported architectures, the preferred `td_create_client_id`, `td_send` and `td_receive` symbols and runtime dependencies have been inspected, and native-package plus Flatpak smoke tests pass. See [Architecture](ARCHITECTURE.md) for the candidate source pin and packaging checklist.
