@@ -23,7 +23,8 @@ impl RequestId {
 
     /// Parses an @extra string emitted by this type.
     pub fn from_extra(value: &str) -> Option<Self> {
-        value.strip_prefix("telestra:")?.parse().ok().map(Self)
+        let id = Self(value.strip_prefix("telestra:")?.parse().ok()?);
+        (id.to_extra() == value).then_some(id)
     }
 }
 
@@ -147,7 +148,14 @@ mod tests {
 
     #[test]
     fn malformed_or_foreign_extra_values_are_rejected() {
-        for value in ["42", "telestra:", "telestra:-1", "other:42"] {
+        for value in [
+            "42",
+            "telestra:",
+            "telestra:-1",
+            "telestra:00042",
+            "telestra:+42",
+            "other:42",
+        ] {
             assert_eq!(RequestId::from_extra(value), None);
         }
     }
