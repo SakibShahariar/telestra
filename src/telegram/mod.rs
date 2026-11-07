@@ -10,12 +10,14 @@ mod events;
 mod lifecycle;
 mod protocol;
 mod transport;
+mod worker;
 
 pub use decoder::{DecodeError, DecodedMessage, decode_message};
 pub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEvent, TdlibError};
 pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
 pub use transport::{JsonTransport, TransportError, TransportOperation};
+pub use worker::{BackendWorker, WorkerEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendStatus {
