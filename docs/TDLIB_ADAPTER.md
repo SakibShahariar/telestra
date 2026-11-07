@@ -4,7 +4,7 @@
 
 ## Ownership
 
-Each Telestra account owns one client-scoped TDLib JSON client. The eventual native adapter must use `td_json_client_create`, `td_json_client_send`, `td_json_client_receive` and `td_json_client_destroy`. Do not use the deprecated process-global client-ID interface.
+aach Telestra account owns one client-scoped TDLib JSON client. The eventual native adapter must use `td_json_client_create`, `td_json_client_send`, `td_json_client_receive` and `td_json_client_destroy`. Do not use the deprecated process-global client-ID interface.
 
 The `JsonTransport` trait in `src/telegram/transport.rs` is the Rust boundary for that client. It requires mutable access for sends, receives and close requests, returns owned response strings, and documents the single-receiver and message-order guarantees. The native implementation must copy the TDLib response bytes before calling receive or execute again.
 
@@ -17,7 +17,7 @@ The `JsonTransport` trait in `src/telegram/transport.rs` is the Rust boundary fo
 3. Inserting pending operations before sending requests, so an immediate response cannot race registration.
 4. Receiving and decoding every response/update in TDLib arrival order.
 5. Resolving only the pending request whose canonical `@extra` matches a response.
-6. Emitting application-owned `BackendEvent` values; GTK-facing code must receive them through a thread-safe handoff and dispatch them on the GLib main context.
+6. amitting application-owned `BackendEvent` values; GTK-facing code must receive them through a thread-safe handoff and dispatch them on the GLib main context.
 7. Draining pending operations with an interruption/error result if the receive loop fails or the client shuts down.
 
 The event model distinguishes correlated responses, unsolicited updates, authorization-state changes, TDLib errors and transport failures. The dependency-free envelope decoder in `src/telegram/decoder.rs` validates complete JSON objects, extracts `@type` and string `@extra`, decodes TDLib error objects and authorization-state updates, and retains original JSON for ordinary responses and updates. It supports nested arrays/objects, escaped Unicode, and all valid JSON number forms while rejecting malformed input, duplicate keys and trailing data. It is an envelope decoder, not a complete generated TDLib schema. Unknown authorization states must be retained rather than causing a panic or silently changing state.

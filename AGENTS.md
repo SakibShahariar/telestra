@@ -8,8 +8,8 @@ The repository now contains an initial GTK4/libadwaita application shell and a d
 
 ## Working rules
 
-- Work directly on the verified default branch unless the maintainer explicitly authorizes another workflow.
-- Inspect the current repository state before making changes. Fetch the current contents and blob SHA of every existing file immediately before editing it.
+  Work directly on the verified default branch unless the maintainer explicitly authorizes another workflow.
+  Inspect the current repository state before making changes. Fetch the current contents and blob SHA of every existing file immediately before editing it.
 - Re-check the default branch head before each commit. Never overwrite concurrent changes.
 - Do not force-push, rewrite history, amend published commits, create unapproved branches, or open pull requests unless explicitly requested.
 - Keep commits focused and use conventional commit subjects, for example `feat:`, `fix:`, `docs:`, `build:`, `test:`, and `refactor:`. When a commit addresses a GitHub issue, include its reference in the subject, such as `feat(downloads): add transfer queue (#15)`. Include multiple issue references only when the commit genuinely addresses each one.
