@@ -31,7 +31,15 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run Clippy
-        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Run tests
-        run: cargo test --locked --all-targets
+        run: cargo test --all-targets
+
+      - name: Upload Cargo lockfile after dependency resolution
+        uses: actions/upload-artifact@v4
+        with:
+          name: telestra-final-cargo-lockfile
+          path: Cargo.lock
+          if-no-files-found: error
+          retention-days: 1
