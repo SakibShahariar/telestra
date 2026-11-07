@@ -6,14 +6,12 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use super::{
-    DecodeError, JsonTransport, TransportError, TransportOperation, decode_envelope,
-};
+use super::{DecodeError, JsonTransport, TransportError, TransportOperation, decode_envelope};
 
 /// A failure while routing a message from TDLib's shared receive stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,7 +222,6 @@ mod tests {
     }
 }
 
-
 /// Thread-safe sender for requests addressed to a TDLib client ID.
 ///
 /// The native implementation wraps td_send(client_id, request). It must keep
@@ -272,10 +269,7 @@ impl<S: ClientRequestSender> JsonTransport for AccountMailboxTransport<S> {
             .map_err(|message| TransportError::new(TransportOperation::Send, message))
     }
 
-    fn receive(
-        &mut self,
-        timeout: Duration,
-    ) -> Result<Option<String>, TransportError> {
+    fn receive(&mut self, timeout: Duration) -> Result<Option<String>, TransportError> {
         match self.mailbox.recv_timeout(timeout) {
             Ok(message) => Ok(Some(message)),
             Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
@@ -426,7 +420,6 @@ mod shared_dispatcher_tests {
     use super::{DispatchError, SharedDispatcher, SharedReceiveSource};
     use std::sync::mpsc;
     use std::time::Duration;
-
 
     #[derive(Default)]
     struct RecordingSender {
