@@ -20,7 +20,7 @@ jobs:
       - name: Install native development dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgtk-4-dev libadwaita-1-dev pkg-config
+          sudo apt-get install --yes libgtk-4-dev libadwaita-1-dev pkg-config xvfb dbus-daemon
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -35,4 +35,14 @@ jobs:
 
       - name: Run tests
         run: cargo test --locked --all-targets
+
+      - name: Smoke test GTK application startup
+        run: |
+          set +e
+          xvfb-run -a dbus-run-session -- timeout --signal=TERM --kill-after=2s 10s cargo run --locked
+          status=$?
+          if [ "$status" -ne 124 ]; then
+            echo "Application exited before the smoke-test timeout (status: $status)."
+            exit "$status"
+          fi
 
