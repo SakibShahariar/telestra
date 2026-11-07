@@ -1,4 +1,4 @@
-use adw::glib;
+use gtk::glib;
 
 mod app;
 mod telegram;
