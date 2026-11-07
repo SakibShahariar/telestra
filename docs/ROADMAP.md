@@ -61,6 +61,25 @@ This roadmap describes intended areas of work. It is not a promise that every it
 - [ ] Performance and memory profiling.
 - [ ] Localization and desktop integration improvements.
 
+## Feature tracking
+
+The detailed feature backlog is organized into 14 parent issues. Each parent links to independently trackable child issues. These are planning items, not implemented features; API-dependent work must be validated before implementation.
+
+1. [Download and upload performance](https://github.com/SakibShahariar/telestra/issues/1)
+2. [Messaging and message workflows](https://github.com/SakibShahariar/telestra/issues/2)
+3. [Privacy and discreet usage](https://github.com/SakibShahariar/telestra/issues/3)
+4. [Chat management and organization](https://github.com/SakibShahariar/telestra/issues/4)
+5. [Media library and viewer](https://github.com/SakibShahariar/telestra/issues/5)
+6. [Translation and optional AI tools](https://github.com/SakibShahariar/telestra/issues/6)
+7. [Proxy and network management](https://github.com/SakibShahariar/telestra/issues/7)
+8. [Premium-like local enhancements](https://github.com/SakibShahariar/telestra/issues/8)
+9. [Desktop UI and GNOME integration](https://github.com/SakibShahariar/telestra/issues/9)
+10. [Notifications](https://github.com/SakibShahariar/telestra/issues/10)
+11. [Advanced tools and utilities](https://github.com/SakibShahariar/telestra/issues/11)
+12. [Performance and resource efficiency](https://github.com/SakibShahariar/telestra/issues/12)
+13. [Security and local data protection](https://github.com/SakibShahariar/telestra/issues/13)
+14. [Accessibility and internationalization](https://github.com/SakibShahariar/telestra/issues/14)
+
 ## Release readiness
 
 A release requires working authentication and core messaging, reliable session handling, documented data storage, dependency/license review, security review, automated tests, packaging, and clear known limitations. No release date is set.
