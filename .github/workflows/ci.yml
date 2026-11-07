@@ -17,6 +17,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Check TDLib packaging script syntax
+        run: bash -n scripts/verify-tdlib-source.sh
+
       - name: Install native development dependencies
         run: |
           sudo apt-get update
