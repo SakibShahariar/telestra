@@ -246,6 +246,7 @@ enum DispatcherCommand {
 /// Handle for the one process-wide TDLib receive dispatcher.
 pub struct SharedDispatcher {
     commands: Sender<DispatcherCommand>,
+    events: Receiver<DispatchError>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -253,11 +254,13 @@ impl SharedDispatcher {
     /// Starts the only thread permitted to poll the native shared receive API.
     pub fn spawn<S: SharedReceiveSource>(source: S) -> std::io::Result<Self> {
         let (commands, receiver) = mpsc::channel();
+        let (event_sender, events) = mpsc::channel();
         let thread = thread::Builder::new()
             .name("telestra-tdlib-dispatch".to_owned())
-            .spawn(move || run_dispatcher(source, receiver))?;
+            .spawn(move || run_dispatcher(source, receiver, event_sender))?;
         Ok(Self {
             commands,
+            events,
             thread: Some(thread),
         })
     }
@@ -287,6 +290,11 @@ impl SharedDispatcher {
             .map_err(|_| DispatchError::DispatcherStopped)
     }
 
+    /// Receives routing and native receive failures from the dispatcher.
+    pub fn events(&self) -> &Receiver<DispatchError> {
+        &self.events
+    }
+
     /// Stops polling and joins the process-wide receive thread.
     pub fn shutdown(mut self) -> thread::Result<()> {
         let _ = self.commands.send(DispatcherCommand::Stop);
@@ -307,6 +315,7 @@ impl Drop for SharedDispatcher {
 fn run_dispatcher<S: SharedReceiveSource>(
     mut source: S,
     commands: Receiver<DispatcherCommand>,
+    events: Sender<DispatchError>,
 ) {
     const RECEIVE_TIMEOUT: Duration = Duration::from_millis(20);
     let mut registry = ClientMailboxRegistry::default();
@@ -325,10 +334,15 @@ fn run_dispatcher<S: SharedReceiveSource>(
 
         match source.receive(RECEIVE_TIMEOUT) {
             Ok(Some(json)) => {
-                let _ = registry.route_json(json);
+                if let Err(error) = registry.route_json(json) {
+                    let _ = events.send(error);
+                }
             }
             Ok(None) => {}
-            Err(_) => break,
+            Err(message) => {
+                let _ = events.send(DispatchError::ReceiveFailed(message));
+                break;
+            }
         }
     }
 }
@@ -370,6 +384,36 @@ mod shared_dispatcher_tests {
             r#"{"@type":"updateNewChat","@client_id":41}"#
         );
         assert!(dispatcher.unregister_client(41).unwrap());
+        dispatcher.shutdown().unwrap();
+    }
+
+
+    #[test]
+    fn shared_dispatcher_reports_messages_for_unregistered_clients() {
+        let (incoming, source) = mpsc::channel();
+        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming }).unwrap();
+
+        incoming
+            .send(r#"{"@type":"updateNewChat","@client_id":47}"#.to_owned())
+            .unwrap();
+
+        assert_eq!(
+            dispatcher.events().recv_timeout(Duration::from_secs(1)).unwrap(),
+            DispatchError::UnknownClient(47)
+        );
+        dispatcher.shutdown().unwrap();
+    }
+
+    #[test]
+    fn shared_dispatcher_reports_native_receive_failures() {
+        let (incoming, source) = mpsc::channel();
+        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming }).unwrap();
+        drop(source);
+
+        assert_eq!(
+            dispatcher.events().recv_timeout(Duration::from_secs(1)).unwrap(),
+            DispatchError::ReceiveFailed("source disconnected".to_owned())
+        );
         dispatcher.shutdown().unwrap();
     }
 
