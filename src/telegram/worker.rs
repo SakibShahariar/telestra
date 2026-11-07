@@ -297,10 +297,7 @@ fn fail_pending(
             reason: reason.to_owned(),
         });
     }
-}
-
-
-#[cfg(test)]
+}\n\n#[cfg(test)]
 mod tests {
     use super::{BackendWorker, WorkerEvent};
     use crate::telegram::{
@@ -338,10 +335,7 @@ mod tests {
     #[test]
     fn worker_correlates_response_and_waits_for_close_confirmation() {
         let request_id = RequestId::new(73);
-        let response = format!(
-            r#"{{"@type":"ok","@extra":"{}"}}"#,
-            request_id.to_extra()
-        );
+        let response = format!(r#"{{"@type":"ok","@extra":"{}"}}"#, request_id.to_extra());
         let sent = Arc::new(Mutex::new(Vec::new()));
         let transport = FakeTransport {
             incoming: VecDeque::from([response]),
@@ -458,10 +452,7 @@ mod tests {
                 Ok(())
             }
 
-            fn receive(
-                &mut self,
-                _timeout: Duration,
-            ) -> Result<Option<String>, TransportError> {
+            fn receive(&mut self, _timeout: Duration) -> Result<Option<String>, TransportError> {
                 Err(TransportError::new(
                     TransportOperation::Receive,
                     "scripted receive failure",
