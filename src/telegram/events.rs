@@ -113,6 +113,16 @@ impl<T> EventRouter<T> {
         self.pending.insert(request_id, operation)
     }
 
+    /// Returns whether an operation is currently awaiting a response.
+    pub fn contains(&self, request_id: RequestId) -> bool {
+        self.pending.contains(request_id)
+    }
+
+    /// Removes an operation after its request could not be sent.
+    pub fn cancel(&mut self, request_id: RequestId) -> Option<T> {
+        self.pending.resolve(request_id)
+    }
+
     /// Routes one decoded TDLib message to the matching application event.
     ///
     /// Responses and errors resolve only their matching pending operation;
