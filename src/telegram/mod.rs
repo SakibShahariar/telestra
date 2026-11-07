@@ -6,7 +6,7 @@
 
 mod protocol;
 
-pub use protocol::{PendingRequests, RequestId};
+pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendStatus {
