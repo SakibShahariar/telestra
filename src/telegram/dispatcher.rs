@@ -7,6 +7,8 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 use super::{DecodeError, decode_envelope};
 
@@ -23,6 +25,10 @@ pub enum DispatchError {
     MailboxDisconnected(i32),
     /// The incoming TDLib JSON envelope was malformed.
     Decode(DecodeError),
+    /// The shared native receive operation failed.
+    ReceiveFailed(String),
+    /// The dispatcher thread is no longer available.
+    DispatcherStopped,
 }
 
 impl fmt::Display for DispatchError {
@@ -45,6 +51,10 @@ impl fmt::Display for DispatchError {
                 )
             }
             Self::Decode(error) => write!(formatter, "invalid TDLib message: {error}"),
+            Self::ReceiveFailed(message) => {
+                write!(formatter, "TDLib shared receive failed: {message}")
+            }
+            Self::DispatcherStopped => formatter.write_str("TDLib dispatcher has stopped"),
         }
     }
 }
@@ -208,5 +218,171 @@ mod tests {
             registry.route_json(r#"{"@type":"ok","@client_id":31,}"#.to_owned()),
             Err(DispatchError::Decode(_))
         ));
+    }
+}
+
+/// Native receive source owned by the process-wide dispatcher thread.
+///
+/// A TDLib implementation must be the sole caller of the process-global
+/// td_receive function. It must copy the returned C string into an owned
+/// String before returning. Ok(None) represents a timeout, not closure.
+pub trait SharedReceiveSource: Send + 'static {
+    /// Receives the next message from TDLib's shared stream.
+    fn receive(&mut self, timeout: Duration) -> Result<Option<String>, String>;
+}
+
+enum DispatcherCommand {
+    Register {
+        client_id: i32,
+        reply: Sender<Result<Receiver<String>, DispatchError>>,
+    },
+    Unregister {
+        client_id: i32,
+        reply: Sender<bool>,
+    },
+    Stop,
+}
+
+/// Handle for the one process-wide TDLib receive dispatcher.
+pub struct SharedDispatcher {
+    commands: Sender<DispatcherCommand>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl SharedDispatcher {
+    /// Starts the only thread permitted to poll the native shared receive API.
+    pub fn spawn<S: SharedReceiveSource>(source: S) -> std::io::Result<Self> {
+        let (commands, receiver) = mpsc::channel();
+        let thread = thread::Builder::new()
+            .name("telestra-tdlib-dispatch".to_owned())
+            .spawn(move || run_dispatcher(source, receiver))?;
+        Ok(Self {
+            commands,
+            thread: Some(thread),
+        })
+    }
+
+    /// Registers an account and returns its dedicated ordered message mailbox.
+    pub fn register_client(
+        &self,
+        client_id: i32,
+    ) -> Result<Receiver<String>, DispatchError> {
+        let (reply, response) = mpsc::channel();
+        self.commands
+            .send(DispatcherCommand::Register { client_id, reply })
+            .map_err(|_| DispatchError::DispatcherStopped)?;
+        response
+            .recv()
+            .map_err(|_| DispatchError::DispatcherStopped)?
+    }
+
+    /// Removes an account mailbox after its closed authorization state arrives.
+    pub fn unregister_client(&self, client_id: i32) -> Result<bool, DispatchError> {
+        let (reply, response) = mpsc::channel();
+        self.commands
+            .send(DispatcherCommand::Unregister { client_id, reply })
+            .map_err(|_| DispatchError::DispatcherStopped)?;
+        response
+            .recv()
+            .map_err(|_| DispatchError::DispatcherStopped)
+    }
+
+    /// Stops polling and joins the process-wide receive thread.
+    pub fn shutdown(mut self) -> thread::Result<()> {
+        let _ = self.commands.send(DispatcherCommand::Stop);
+        if let Some(thread) = self.thread.take() {
+            thread.join()
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Drop for SharedDispatcher {
+    fn drop(&mut self) {
+        let _ = self.commands.send(DispatcherCommand::Stop);
+    }
+}
+
+fn run_dispatcher<S: SharedReceiveSource>(
+    mut source: S,
+    commands: Receiver<DispatcherCommand>,
+) {
+    const RECEIVE_TIMEOUT: Duration = Duration::from_millis(20);
+    let mut registry = ClientMailboxRegistry::default();
+
+    loop {
+        match commands.recv_timeout(RECEIVE_TIMEOUT) {
+            Ok(DispatcherCommand::Register { client_id, reply }) => {
+                let _ = reply.send(registry.register(client_id));
+            }
+            Ok(DispatcherCommand::Unregister { client_id, reply }) => {
+                let _ = reply.send(registry.unregister(client_id));
+            }
+            Ok(DispatcherCommand::Stop) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+        }
+
+        match source.receive(RECEIVE_TIMEOUT) {
+            Ok(Some(json)) => {
+                let _ = registry.route_json(json);
+            }
+            Ok(None) => {}
+            Err(_) => break,
+        }
+    }
+}
+
+#[cfg(test)]
+mod shared_dispatcher_tests {
+    use super::{DispatchError, SharedDispatcher, SharedReceiveSource};
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    struct ChannelSource {
+        incoming: mpsc::Receiver<String>,
+    }
+
+    impl SharedReceiveSource for ChannelSource {
+        fn receive(&mut self, timeout: Duration) -> Result<Option<String>, String> {
+            match self.incoming.recv_timeout(timeout) {
+                Ok(message) => Ok(Some(message)),
+                Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    Err("source disconnected".to_owned())
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn shared_dispatcher_routes_messages_to_registered_account() {
+        let (incoming, source) = mpsc::channel();
+        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming }).unwrap();
+        let account = dispatcher.register_client(41).unwrap();
+
+        incoming
+            .send(r#"{"@type":"updateNewChat","@client_id":41}"#.to_owned())
+            .unwrap();
+
+        assert_eq!(
+            account.recv_timeout(Duration::from_secs(1)).unwrap(),
+            r#"{"@type":"updateNewChat","@client_id":41}"#
+        );
+        assert!(dispatcher.unregister_client(41).unwrap());
+        dispatcher.shutdown().unwrap();
+    }
+
+    #[test]
+    fn shared_dispatcher_rejects_duplicate_client_registration() {
+        let (_incoming, source) = mpsc::channel();
+        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming: source }).unwrap();
+        let _first = dispatcher.register_client(43).unwrap();
+
+        assert!(matches!(
+            dispatcher.register_client(43),
+            Err(DispatchError::DuplicateClient(43))
+        ));
+        dispatcher.shutdown().unwrap();
     }
 }
