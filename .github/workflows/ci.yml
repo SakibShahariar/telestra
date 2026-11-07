@@ -28,7 +28,15 @@ jobs:
           components: rustfmt, clippy
 
       - name: Generate Cargo lockfile for reproducibility audit
-        run: cargo generate-lockfile && cat Cargo.lock
+        run: cargo generate-lockfile
+
+      - name: Upload generated Cargo lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: telestra-cargo-lockfile
+          path: Cargo.lock
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Check formatting
         run: cargo fmt --all -- --check
