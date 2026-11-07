@@ -4,6 +4,9 @@ use gtk::prelude::*;
 use crate::telegram::BackendStatus;
 
 pub fn build(application: &adw::Application) {
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    root.append(&adw::HeaderBar::new());
+
     let content = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(12)
@@ -30,13 +33,14 @@ pub fn build(application: &adw::Application) {
     content.append(&title);
     content.append(&summary);
     content.append(&status);
+    root.append(&content);
 
     let window = adw::ApplicationWindow::builder()
         .application(application)
         .title("Telestra")
         .default_width(980)
         .default_height(680)
-        .content(&content)
+        .content(&root)
         .build();
 
     window.present();
