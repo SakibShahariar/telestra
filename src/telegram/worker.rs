@@ -572,4 +572,122 @@ mod tests {
         );
         worker.join().unwrap();
     }
+
+    #[test]
+    fn worker_reports_send_failure_and_stops_as_failed() {
+        struct FailingSendTransport;
+
+        impl JsonTransport for FailingSendTransport {
+            fn send(&mut self, _request: &str) -> Result<(), TransportError> {
+                Err(TransportError::new(
+                    TransportOperation::Send,
+                    "scripted send failure",
+                ))
+            }
+
+            fn receive(&mut self, _timeout: Duration) -> Result<Option<String>, TransportError> {
+                Ok(None)
+            }
+
+            fn close(&mut self) -> Result<(), TransportError> {
+                Ok(())
+            }
+        }
+
+        let request_id = RequestId::new(77);
+        let worker = BackendWorker::spawn(FailingSendTransport).unwrap();
+        let request = format!(
+            r#"{{"@type":"getMe","@extra":"{}"}}"#,
+            request_id.to_extra()
+        );
+        worker
+            .send_request(request_id, "load-current-user", request)
+            .unwrap();
+
+        assert!(matches!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::RequestFailed {
+                request_id: failed,
+                operation,
+                error,
+            } if failed == request_id
+                && operation == "load-current-user"
+                && error.operation() == TransportOperation::Send
+        ));
+        assert_eq!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::Stopped(ClientLifecycle::Failed)
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn worker_reports_malformed_incoming_json_and_fails_pending_work() {
+        struct MalformedTransport {
+            delivered: bool,
+        }
+
+        impl JsonTransport for MalformedTransport {
+            fn send(&mut self, _request: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+
+            fn receive(&mut self, _timeout: Duration) -> Result<Option<String>, TransportError> {
+                if self.delivered {
+                    Ok(None)
+                } else {
+                    self.delivered = true;
+                    Ok(Some(r#"{"@type":"ok","broken":}"#.to_owned()))
+                }
+            }
+
+            fn close(&mut self) -> Result<(), TransportError> {
+                Ok(())
+            }
+        }
+
+        let request_id = RequestId::new(78);
+        let worker = BackendWorker::spawn(MalformedTransport { delivered: false }).unwrap();
+        let request = format!(
+            r#"{{"@type":"getMe","@extra":"{}"}}"#,
+            request_id.to_extra()
+        );
+        worker
+            .send_request(request_id, "load-current-user", request)
+            .unwrap();
+
+        assert!(matches!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::ProtocolFailed { .. }
+        ));
+        assert!(matches!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::PendingFailed {
+                request_id: failed,
+                operation,
+                ..
+            } if failed == request_id && operation == "load-current-user"
+        ));
+        assert_eq!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::Stopped(ClientLifecycle::Failed)
+        );
+        worker.join().unwrap();
+    }
+
 }
