@@ -30,6 +30,18 @@ If the wrapper cannot meet those requirements, use the JSON interface through a 
 
 TDLib remains asynchronous. Its updates must be consumed without blocking GTK's main thread. Background runtime ownership and shutdown must be explicit, and GTK-facing state changes must be marshalled onto the main context.
 
+### JSON client lifecycle requirements
+
+Use the client-scoped `td_json_client_*` API (`create`, `send`, `receive`, and `destroy`) rather than the older global `td_create_client_id` / `td_send` / `td_receive` interface. The older interface is documented as deprecated for removal in TDLib 2.0.0.
+
+- Give each TDLib client one receive loop on a dedicated worker. TDLib forbids concurrent calls to receive for the same client; the worker must preserve the order in which responses and updates arrive.
+- Copy each returned C string into owned Rust memory before the next receive call, because TDLib invalidates the returned pointer on the next receive/execute call on that thread.
+- Attach a unique `@extra` value to every request that expects a response and route the matching response to the waiting application operation. Updates without a matching `@extra` remain ordered events, not failed requests.
+- Shutdown must send TDLib's `close` request, continue receiving until `updateAuthorizationState` reports `authorizationStateClosed`, and only then destroy the client and join the worker. Do not terminate the process while TDLib is still closing its local database.
+- GTK-facing events must cross a thread-safe channel and be dispatched on the GLib main context; no GTK objects may be touched by the receive worker.
+
+These constraints should shape the fake-transport tests before any live-account authentication is introduced.
+
 ## Rust and desktop dependency baseline
 
 - Rust edition: 2024; minimum Rust version: 1.85.
