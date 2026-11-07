@@ -25,8 +25,10 @@ mod tests {
 
     #[test]
     fn unconfigured_backend_is_described_honestly() {
-        assert!(BackendStatus::NotConfigured
-            .description()
-            .contains("does not sign in"));
+        assert!(
+            BackendStatus::NotConfigured
+                .description()
+                .contains("does not sign in")
+        );
     }
 }
