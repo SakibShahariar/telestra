@@ -1,8 +1,9 @@
 //! Application-facing Telegram backend types.
 //!
 //! Keep TDLib-specific requests, update objects and runtime ownership behind
-//! this module. The concrete adapter will be added after its build and
-//! lifecycle behavior has been verified.
+//! this module. Transport-independent JSON decoding, event routing, request
+//! correlation and lifecycle primitives are implemented here; the native
+//! TDLib runtime and background worker are not yet connected.
 
 mod decoder;
 mod events;

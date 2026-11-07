@@ -1,6 +1,6 @@
 # TDLib adapter implementation contract
 
-**Status:** Design and transport-independent primitives only. No native TDLib library is linked, and this document does not claim that Telegram connectivity works.
+**Status:** Transport-independent protocol, JSON envelope decoder, event routing and lifecycle primitives are implemented and covered by unit tests. No native TDLib library is linked, no background worker is implemented, and Telegram connectivity is not available.
 
 ## Ownership
 
@@ -39,7 +39,7 @@ A transport error during shutdown must be surfaced and must not be misreported a
 
 ## Test boundary
 
-The transport, lifecycle, request correlation and event types are deliberately independent of a real Telegram account. Fake-transport tests should cover:
+The transport, lifecycle, request correlation, decoder and event types are deliberately independent of a real Telegram account. Existing unit tests cover FIFO transport behavior, request correlation, malformed JSON rejection, TDLib error conversion, future authorization states, and preservation of pending requests across updates. As the worker is implemented, extend fake-transport tests to cover:
 
 - FIFO delivery of updates and responses.
 - Send ordering and request registration before send.
@@ -50,7 +50,7 @@ The transport, lifecycle, request correlation and event types are deliberately i
 - Receive-loop failure draining pending operations.
 - One receive owner per client and no GTK access from the worker.
 
-The current tests exercise only the foundational transport contract, lifecycle transitions, typed event values and request correlation. The worker, JSON decoder, native FFI, package integration and full shutdown handshake remain unimplemented.
+The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, and lifecycle transitions. The background worker, native FFI, native package integration and end-to-end shutdown handshake remain unimplemented.
 
 ## Native build gate
 
