@@ -335,7 +335,7 @@ mod tests {
         let response = format!(r#"{{"@type":"ok","@extra":"{}"}}"#, request_id.to_extra());
         let sent = Arc::new(Mutex::new(Vec::new()));
         let transport = FakeTransport {
-            incoming: VecDeque::from([response]),
+            incoming: VecDeque::from([response.clone()]),
             sent: Arc::clone(&sent),
         };
         let worker = BackendWorker::spawn(transport).unwrap();
