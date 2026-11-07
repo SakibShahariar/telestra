@@ -4,12 +4,12 @@
 //! this module. The concrete adapter will be added after its build and
 //! lifecycle behavior has been verified.
 
-mod decoder;\nmod events;
+mod events;
 mod lifecycle;
 mod protocol;
 mod transport;
 
-pub use decoder::{decode_message, DecodeError, DecodedMessage};\npub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEvent, TdlibError};
+pub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEvent, TdlibError};
 pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
 pub use transport::{JsonTransport, TransportError, TransportOperation};

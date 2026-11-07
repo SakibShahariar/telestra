@@ -20,7 +20,7 @@ The backend worker—not GTK—must own the transport and be the only caller of 
 6. Emitting application-owned `BackendEvent` values; GTK-facing code must receive them through a thread-safe handoff and dispatch them on the GLib main context.
 7. Draining pending operations with an interruption/error result if the receive loop fails or the client shuts down.
 
-The event model distinguishes correlated responses, unsolicited updates, authorization-state changes, TDLib errors and transport failures. The dependency-free envelope decoder in `src/telegram/decoder.rs` validates JSON structure, extracts `@type` and `@extra`, decodes TDLib error objects and authorization-state updates, and retains original payloads for responses and unknown updates. It rejects malformed JSON, duplicate object keys, invalid error fields and trailing data. It is intentionally an envelope decoder, not a complete generated TDLib schema. Unknown authorization states must be retained rather than causing a panic or silently changing state.
+The event model distinguishes correlated responses, unsolicited updates, authorization-state changes, TDLib errors and transport failures. Unknown authorization states must be retained rather than causing a panic or silently changing state.
 
 ## Lifecycle and shutdown
 

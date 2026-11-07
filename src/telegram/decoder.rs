@@ -103,7 +103,7 @@ fn decode_authorization_state(state: &str) -> AuthorizationState {
 enum Value {
     Null,
     Bool,
-    Number(i64),
+    Number(Option<i64>),
     String(String),
     Array,
     Object(BTreeMap<String, Value>),
@@ -115,7 +115,7 @@ impl Value {
     }
 
     fn as_i64(&self) -> Option<i64> {
-        if let Self::Number(value) = self { Some(*value) } else { None }
+        if let Self::Number(value) = self { *value } else { None }
     }
 
     fn as_object(&self) -> Option<&BTreeMap<String, Value>> {
@@ -259,12 +259,21 @@ impl Parser<'_> {
             }
             _ => return Err(self.error("invalid JSON number")),
         }
-        if self.input.get(self.offset) == Some(&b'.') || matches!(self.input.get(self.offset), Some(b'e' | b'E')) {
-            return Err(self.error("non-integer JSON number is not valid for TDLib error code"));
+        if self.input.get(self.offset) == Some(&b'.') {
+            self.offset += 1;
+            let fraction_start = self.offset;
+            while matches!(self.input.get(self.offset), Some(b'0'..=b'9')) { self.offset += 1; }
+            if self.offset == fraction_start { return Err(self.error("invalid JSON fraction")); }
+        }
+        if matches!(self.input.get(self.offset), Some(b'e' | b'E')) {
+            self.offset += 1;
+            if matches!(self.input.get(self.offset), Some(b'+' | b'-')) { self.offset += 1; }
+            let exponent_start = self.offset;
+            while matches!(self.input.get(self.offset), Some(b'0'..=b'9')) { self.offset += 1; }
+            if self.offset == exponent_start { return Err(self.error("invalid JSON exponent")); }
         }
         let number = std::str::from_utf8(&self.input[start..self.offset])
-            .ok().and_then(|text| text.parse::<i64>().ok())
-            .ok_or_else(|| self.error("JSON integer is out of range"))?;
+            .ok().and_then(|text| text.parse::<i64>().ok());
         Ok(Value::Number(number))
     }
 
