@@ -8,7 +8,7 @@ This roadmap describes intended areas of work. It is not a promise that every it
 - [x] Record contributor and repository-agent guidance.
 - [x] Define the TDLib JSON interface boundary and document the Rust transport candidates; final wrapper choice awaits a build/runtime spike.
 - [x] Establish Rust, GTK4 and libadwaita Rust-binding version targets.
-- [ ] Add a minimal application skeleton and reproducible development environment.
+- [ ] Add a minimal application skeleton and reproducible development environment (initial shell and manifest added; build validation pending).
 - [ ] Add formatting, linting, tests and CI (workflow added; first successful run pending).
 
 ## Stage 1 — Essential Telegram client
