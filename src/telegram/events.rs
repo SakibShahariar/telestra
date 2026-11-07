@@ -4,6 +4,7 @@
 //! payloads are retained only for response/update data that has not yet gained
 //! a stable application model; GTK widgets must never parse TDLib JSON.
 
+use super::decoder::DecodedMessage;
 use crate::telegram::{RequestId, TransportError};
 
 /// A TDLib authorization phase relevant to application lifecycle decisions.
@@ -112,6 +113,23 @@ impl<T> EventRouter<T> {
         self.pending.insert(request_id, operation)
     }
 
+    /// Routes one decoded TDLib message to the matching application event.
+    ///
+    /// Responses and errors resolve only their matching pending operation;
+    /// updates and authorization transitions never consume pending requests.
+    pub fn route_decoded_message(&mut self, message: DecodedMessage) -> RoutedBackendEvent<T> {
+        match message {
+            DecodedMessage::Response { extra, json } => {
+                self.route_response(extra.as_deref(), json)
+            }
+            DecodedMessage::Error { extra, error } => self.route_error(extra.as_deref(), error),
+            DecodedMessage::Update { json } => self.route_update(json),
+            DecodedMessage::AuthorizationStateChanged(state) => {
+                self.route_authorization_state(state)
+            }
+        }
+    }
+
     /// Routes a response and completes only the operation matching its @extra.
     pub fn route_response(&mut self, extra: Option<&str>, json: String) -> RoutedBackendEvent<T> {
         let request_id = extra.and_then(RequestId::from_extra);
@@ -165,6 +183,73 @@ impl<T> EventRouter<T> {
 mod tests {
     use super::{AuthorizationState, BackendEvent, TdlibError};
     use crate::telegram::{RequestId, TransportError, TransportOperation};
+
+    #[test]
+    fn decoded_response_routes_and_completes_matching_operation() {
+        use super::EventRouter;
+        use crate::telegram::DecodedMessage;
+
+        let request_id = RequestId::new(51);
+        let mut router = EventRouter::default();
+        router.register(request_id, "send-message");
+
+        let mut routed = router.route_decoded_message(DecodedMessage::Response {
+            extra: Some(request_id.to_extra()),
+            json: r#"{"@type":"ok"}"#.to_owned(),
+        });
+
+        assert!(matches!(routed.event(), BackendEvent::Response { .. }));
+        assert_eq!(routed.take_completed_request(), Some((request_id, "send-message")));
+        assert_eq!(router.pending_len(), 0);
+    }
+
+    #[test]
+    fn decoded_error_routes_and_completes_matching_operation() {
+        use super::EventRouter;
+        use crate::telegram::DecodedMessage;
+
+        let request_id = RequestId::new(52);
+        let mut router = EventRouter::default();
+        router.register(request_id, "load-chats");
+
+        let mut routed = router.route_decoded_message(DecodedMessage::Error {
+            extra: Some(request_id.to_extra()),
+            error: TdlibError::new(500, "Internal error"),
+        });
+
+        assert!(matches!(routed.event(), BackendEvent::Error { .. }));
+        assert_eq!(routed.take_completed_request(), Some((request_id, "load-chats")));
+        assert_eq!(router.pending_len(), 0);
+    }
+
+    #[test]
+    fn decoded_update_and_authorization_state_do_not_consume_pending_operations() {
+        use super::EventRouter;
+        use crate::telegram::DecodedMessage;
+
+        let request_id = RequestId::new(53);
+        let mut router = EventRouter::default();
+        router.register(request_id, "pending-operation");
+
+        let update = router.route_decoded_message(DecodedMessage::Update {
+            json: r#"{"@type":"updateNewChat"}"#.to_owned(),
+        });
+        assert!(matches!(update.event(), BackendEvent::Update { .. }));
+        assert_eq!(router.pending_len(), 1);
+
+        let authorization = router.route_decoded_message(
+            DecodedMessage::AuthorizationStateChanged(AuthorizationState::Ready),
+        );
+        assert_eq!(
+            authorization.event(),
+            &BackendEvent::AuthorizationStateChanged(AuthorizationState::Ready)
+        );
+        assert_eq!(router.pending_len(), 1);
+        assert_eq!(
+            router.drain_pending().collect::<Vec<_>>(),
+            vec![(request_id, "pending-operation")]
+        );
+    }
 
     #[test]
     fn event_router_correlates_response_and_preserves_unmatched_operations() {
