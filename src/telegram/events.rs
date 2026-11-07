@@ -22,6 +22,13 @@ pub enum AuthorizationState {
     Unknown(String),
 }
 
+impl AuthorizationState {
+    /// Returns true only after TDLib confirms that the client is fully closed.
+    pub const fn is_closed(&self) -> bool {
+        matches!(self, Self::Closed)
+    }
+}
+
 /// A structured error returned in a TDLib JSON response.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TdlibError {
@@ -123,5 +130,12 @@ mod tests {
     #[test]
     fn authorization_ready_and_closed_are_distinct_states() {
         assert_ne!(AuthorizationState::Ready, AuthorizationState::Closed);
+    }
+
+    #[test]
+    fn only_closed_authorization_state_confirms_shutdown() {
+        assert!(!AuthorizationState::Closing.is_closed());
+        assert!(AuthorizationState::Closed.is_closed());
+        assert!(!AuthorizationState::Unknown("future".to_owned()).is_closed());
     }
 }
