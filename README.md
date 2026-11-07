@@ -6,7 +6,7 @@ Telestra aims to combine a GNOME-native desktop experience with powerful tools f
 
 ## Project status
 
-**Early planning / initial development.** The application is not ready for everyday use. Features, architecture and release targets are still being established.
+**Early development.** The initial GTK4/libadwaita application shell is in place, but Telegram connectivity, authentication and messaging are not implemented. Telestra is not ready for everyday use.
 
 ## Planned direction
 
@@ -22,14 +22,28 @@ This list describes project goals, not implemented features. Telegram server-sid
 
 ## Technology
 
-- **Language:** Rust
-- **UI:** GTK4 and libadwaita
-- **Telegram client library:** TDLib
+- **Language:** Rust 2024 (Rust 1.85 or newer)
+- **UI:** GTK4 and libadwaita Rust bindings
+- **Telegram client library:** TDLib (integration adapter under evaluation)
 - **Packaging target:** Flatpak
 
 ## Development
 
-The application skeleton and build instructions are not in place yet. See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes.
+Install Rust 1.85 or newer and the GTK4/libadwaita development libraries for your distribution, then run:
+
+```sh
+cargo run
+```
+
+Useful checks:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. The first window is only a UI shell; it does not connect to Telegram.
 
 ## Project documentation
 
