@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible problem in Telestra
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Please remove phone numbers, tokens, message contents and other private data from logs and screenshots."
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem clearly.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Telestra version or commit
+  - type: input
+    id: environment
+    attributes:
+      label: Linux distribution and desktop environment
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or additional context
