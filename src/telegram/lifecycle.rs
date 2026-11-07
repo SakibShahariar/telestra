@@ -5,6 +5,7 @@
 //! shutdown from TDLib confirming that its authorization state is closed.
 
 use std::fmt;
+use super::events::AuthorizationState;
 
 /// Observable lifecycle phase for one owned TDLib client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -92,6 +93,21 @@ impl ClientState {
             ClientLifecycle::Closed,
             "confirm closed",
         )
+    }
+
+    /// Applies an authorization-state update to the client lifecycle.
+    ///
+    /// Intermediate states do not end the receive loop. Only TDLib's explicit
+    /// `authorizationStateClosed` confirmation completes an orderly close.
+    pub fn observe_authorization_state(
+        &mut self,
+        state: &AuthorizationState,
+    ) -> Result<(), LifecycleError> {
+        if state.is_closed() {
+            self.confirm_closed()
+        } else {
+            Ok(())
+        }
     }
 
     /// Marks the client unusable after an unrecoverable transport/runtime error.
@@ -200,6 +216,25 @@ mod tests {
         assert_eq!(state.lifecycle(), ClientLifecycle::Failed);
         assert!(state.is_terminal());
         assert_ne!(state.lifecycle(), ClientLifecycle::Closed);
+    }
+
+    #[test]
+    fn only_tdlib_closed_authorization_update_completes_shutdown() {
+        use super::super::events::AuthorizationState;
+
+        let mut state = ClientState::new();
+        state.start().unwrap();
+        state.begin_close().unwrap();
+
+        state
+            .observe_authorization_state(&AuthorizationState::Closing)
+            .unwrap();
+        assert_eq!(state.lifecycle(), ClientLifecycle::Closing);
+
+        state
+            .observe_authorization_state(&AuthorizationState::Closed)
+            .unwrap();
+        assert_eq!(state.lifecycle(), ClientLifecycle::Closed);
     }
 
     #[test]
