@@ -85,6 +85,13 @@ impl<T> PendingRequests<T> {
         self.entries.remove(&id)
     }
 
+    /// Resolves a response using the exact `@extra` value emitted by Telestra.
+    ///
+    /// Malformed, foreign or unknown values leave all pending operations intact.
+    pub fn resolve_extra(&mut self, extra: &str) -> Option<T> {
+        RequestId::from_extra(extra).and_then(|id| self.resolve(id))
+    }
+
     /// Returns whether an operation is waiting for the given response.
     pub fn contains(&self, id: RequestId) -> bool {
         self.entries.contains_key(&id)
@@ -157,6 +164,27 @@ mod tests {
         pending.insert(known, "operation");
 
         assert_eq!(pending.resolve(RequestId::new(99)), None);
+        assert!(pending.contains(known));
+    }
+
+    #[test]
+    fn response_extra_resolves_only_its_matching_operation() {
+        let known = RequestId::new(8);
+        let mut pending = PendingRequests::new();
+        pending.insert(known, "operation");
+
+        assert_eq!(pending.resolve_extra(&known.to_extra()), Some("operation"));
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn malformed_or_foreign_extra_does_not_consume_pending_operations() {
+        let known = RequestId::new(9);
+        let mut pending = PendingRequests::new();
+        pending.insert(known, "operation");
+
+        assert_eq!(pending.resolve_extra("foreign:9"), None);
+        assert_eq!(pending.resolve_extra("telestra:not-a-number"), None);
         assert!(pending.contains(known));
     }
 
