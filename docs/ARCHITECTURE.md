@@ -34,6 +34,22 @@ The current `tdlib-rs 1.4.0` build script adds specific packaging risks that mus
 
 TDLib remains asynchronous. Its updates must be consumed without blocking GTK's main thread. Background runtime ownership and shutdown must be explicit, and GTK-facing state changes must be marshalled onto the main context.
 
+### Native TDLib build and packaging direction
+
+The initial packaging direction is to build TDLib from an explicitly pinned upstream source revision for each supported target, rather than downloading opaque third-party binaries during a Cargo build. Use TDLib's CMake-provided JSON interface target (Td::TdJson for the shared library, or Td::TdJsonStatic only if static-linking requirements are deliberately accepted). Keep the source revision, build options and native dependency versions identical between native-package and Flatpak builds.
+
+The upstream build documentation identifies a C++17 compiler, OpenSSL, zlib, CMake and gperf (build-time) as the core dependencies. Its CMake build exposes dedicated JSON interface targets. For a low-memory build, upstream documents building the tdjson target after source preparation. This makes a source-based build reproducible in principle, but does not yet prove that our Flatpak manifest, native packages or supported architecture matrix work.
+
+Before treating this direction as final:
+- Pin an exact TDLib commit and record the resolved source archive checksum.
+- Build the JSON shared library for x86_64 and aarch64 using the same documented options.
+- Verify the output exports every required td_json_client_* symbol and record its runtime dependencies.
+- Verify that the Flatpak build is network-independent after source acquisition and installs the library under the app's controlled runtime path.
+- Run a clean CI link-and-start test against the produced library, plus a package-level smoke test for both architectures.
+- Decide whether native distributions should prefer their system TDLib package or bundle the pinned library only after ABI and symbol compatibility are checked.
+
+Until those checks pass, this is a packaging direction, not a completed integration or a claim that a TDLib runtime can already be built by CI.
+
 ### JSON client lifecycle requirements
 
 Use the client-scoped `td_json_client_*` API (`create`, `send`, `receive`, and `destroy`) rather than the older global `td_create_client_id` / `td_send` / `td_receive` interface. The older interface is documented as deprecated for removal in TDLib 2.0.0.
