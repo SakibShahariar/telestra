@@ -1,3 +1,5 @@
+use adw::glib;
+
 mod app;
 mod telegram;
 
@@ -9,5 +11,3 @@ fn main() -> glib::ExitCode {
     application.connect_activate(app::build);
     application.run()
 }
-
-use adw::glib;
