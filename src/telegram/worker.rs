@@ -264,3 +264,199 @@ fn fail_worker(
         });
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::{BackendWorker, WorkerEvent};
+    use crate::telegram::{
+        AuthorizationState, ClientLifecycle, JsonTransport, RequestId, TransportError,
+        TransportOperation,
+    };
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    struct FakeTransport {
+        incoming: VecDeque<String>,
+        sent: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl JsonTransport for FakeTransport {
+        fn send(&mut self, request: &str) -> Result<(), TransportError> {
+            self.sent.lock().unwrap().push(request.to_owned());
+            Ok(())
+        }
+
+        fn receive(&mut self, _timeout: Duration) -> Result<Option<String>, TransportError> {
+            Ok(self.incoming.pop_front())
+        }
+
+        fn close(&mut self) -> Result<(), TransportError> {
+            self.incoming.push_back(
+                r#"{"@type":"updateAuthorizationState","authorization_state":{"@type":"authorizationStateClosed"}}"#
+                    .to_owned(),
+            );
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn worker_correlates_response_and_waits_for_close_confirmation() {
+        let request_id = RequestId::new(73);
+        let response = format!(
+            r#"{{"@type":"ok","@extra":"{}"}}"#,
+            request_id.to_extra()
+        );
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let transport = FakeTransport {
+            incoming: VecDeque::from([response]),
+            sent: Arc::clone(&sent),
+        };
+        let worker = BackendWorker::spawn(transport).unwrap();
+
+        let request = format!(
+            r#"{{"@type":"getMe","@extra":"{}"}}"#,
+            request_id.to_extra()
+        );
+        worker
+            .send_request(request_id, "load-current-user", request.clone())
+            .unwrap();
+
+        let response_event = worker
+            .events()
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        assert_eq!(
+            response_event,
+            WorkerEvent::Backend {
+                event: crate::telegram::BackendEvent::Response {
+                    request_id: Some(request_id),
+                    json: response,
+                },
+                completed_operation: Some((request_id, "load-current-user".to_owned())),
+            }
+        );
+        assert_eq!(*sent.lock().unwrap(), vec![request]);
+
+        worker.shutdown().unwrap();
+        let close_event = worker
+            .events()
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        assert_eq!(
+            close_event,
+            WorkerEvent::Backend {
+                event: crate::telegram::BackendEvent::AuthorizationStateChanged(
+                    AuthorizationState::Closed
+                ),
+                completed_operation: None,
+            }
+        );
+        assert_eq!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::Stopped(ClientLifecycle::Closed)
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn worker_rejects_mismatched_correlation_before_sending() {
+        let request_id = RequestId::new(74);
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let transport = FakeTransport {
+            incoming: VecDeque::new(),
+            sent: Arc::clone(&sent),
+        };
+        let worker = BackendWorker::spawn(transport).unwrap();
+
+        worker
+            .send_request(
+                request_id,
+                "invalid-request",
+                r#"{"@type":"getMe","@extra":"telestra:999"}"#,
+            )
+            .unwrap();
+        assert!(matches!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::RequestRejected {
+                request_id: rejected,
+                ..
+            } if rejected == request_id
+        ));
+        assert!(sent.lock().unwrap().is_empty());
+
+        worker.shutdown().unwrap();
+        assert!(matches!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::Backend {
+                event: crate::telegram::BackendEvent::AuthorizationStateChanged(
+                    AuthorizationState::Closed
+                ),
+                ..
+            }
+        ));
+        assert_eq!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::Stopped(ClientLifecycle::Closed)
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn worker_surfaces_receive_failure_and_stops_as_failed() {
+        struct FailingTransport;
+
+        impl JsonTransport for FailingTransport {
+            fn send(&mut self, _request: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+
+            fn receive(
+                &mut self,
+                _timeout: Duration,
+            ) -> Result<Option<String>, TransportError> {
+                Err(TransportError::new(
+                    TransportOperation::Receive,
+                    "scripted receive failure",
+                ))
+            }
+
+            fn close(&mut self) -> Result<(), TransportError> {
+                Ok(())
+            }
+        }
+
+        let worker = BackendWorker::spawn(FailingTransport).unwrap();
+        assert!(matches!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::Backend {
+                event: crate::telegram::BackendEvent::TransportFailed(_),
+                ..
+            }
+        ));
+        assert_eq!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::Stopped(ClientLifecycle::Failed)
+        );
+        worker.join().unwrap();
+    }
+}
