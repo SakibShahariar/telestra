@@ -65,7 +65,7 @@ Use the client-scoped `td_json_client_*` API (`create`, `send`, `receive`, and `
 These constraints should shape the fake-transport tests before any live-account authentication is introduced.
 
 
-The adapter's detailed ownership, worker, event and shutdown contract is maintained in [TDLib adapter implementation contract](TDLIB_ADAPTER.md). That document also separates the currently tested transport-independent primitives from the still-unimplemented worker, JSON decoder, native FFI and package integration.
+The adapter's detailed ownership, worker, event and shutdown contract is maintained in [TDLib adapter implementation contract](TDLIB_ADAPTER.md). That document distinguishes the implemented transport-independent protocol, decoder, event-routing and lifecycle primitives from the still-unimplemented background worker, native FFI and package integration.
 
 ## Rust and desktop dependency baseline
 
