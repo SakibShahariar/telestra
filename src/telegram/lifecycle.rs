@@ -7,8 +7,9 @@
 use std::fmt;
 
 /// Observable lifecycle phase for one owned TDLib client.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ClientLifecycle {
+    #[default]
     Created,
     Running,
     Closing,
@@ -53,11 +54,6 @@ pub struct ClientState {
     lifecycle: ClientLifecycle,
 }
 
-impl Default for ClientLifecycle {
-    fn default() -> Self {
-        Self::Created
-    }
-}
 
 impl ClientState {
     /// Creates a state machine for a newly-created client.
