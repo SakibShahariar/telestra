@@ -40,7 +40,9 @@ pub struct PendingRequests<T> {
 impl<T> PendingRequests<T> {
     /// Creates an empty pending-request collection.
     pub fn new() -> Self {
-        Self { entries: BTreeMap::new() }
+        Self {
+            entries: BTreeMap::new(),
+        }
     }
 
     /// Registers an operation, returning any operation previously using the ID.
