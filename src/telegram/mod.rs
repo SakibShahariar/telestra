@@ -4,6 +4,10 @@
 //! this module. The concrete adapter will be added after its build and
 //! lifecycle behavior has been verified.
 
+mod protocol;
+
+pub use protocol::{PendingRequests, RequestId};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendStatus {
     NotConfigured,
