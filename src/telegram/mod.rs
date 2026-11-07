@@ -7,6 +7,7 @@
 //! not yet connected.
 
 mod decoder;
+mod dispatcher;
 mod events;
 mod lifecycle;
 mod protocol;
@@ -14,6 +15,7 @@ mod transport;
 mod worker;
 
 pub use decoder::{DecodedEnvelope, DecodeError, DecodedMessage, decode_envelope, decode_message};
+pub use dispatcher::{ClientMailboxRegistry, DispatchError};
 pub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEvent, TdlibError};
 pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
