@@ -548,7 +548,10 @@ mod shared_dispatcher_tests {
         drop(source);
 
         assert_eq!(
-            dispatcher.events().recv_timeout(Duration::from_secs(1)).unwrap(),
+            dispatcher
+                .events()
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap(),
             DispatchError::ReceiveFailed("source disconnected".to_owned())
         );
         dispatcher.shutdown().unwrap();

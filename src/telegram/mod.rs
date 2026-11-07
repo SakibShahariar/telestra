@@ -15,9 +15,7 @@ mod transport;
 mod worker;
 
 pub use decoder::{DecodeError, DecodedEnvelope, DecodedMessage, decode_envelope, decode_message};
-pub use dispatcher::{
-    ClientMailboxRegistry, DispatchError, SharedDispatcher, SharedReceiveSource,
-};
+pub use dispatcher::{ClientMailboxRegistry, DispatchError, SharedDispatcher, SharedReceiveSource};
 pub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEvent, TdlibError};
 pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
