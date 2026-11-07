@@ -1,6 +1,6 @@
 # TDLib adapter implementation contract
 
-**Status:** Transport-independent protocol, JSON envelope decoder, event routing and lifecycle primitives are implemented and covered by unit tests. No native TDLib library is linked, no background worker is implemented, and Telegram connectivity is not available.
+**Status:** Transport-independent protocol, JSON envelope decoder, event routing, lifecycle primitives and a generic background worker are implemented and covered by unit tests. No native TDLib library is linked, and Telegram connectivity is not available.
 
 ## Ownership
 
@@ -10,7 +10,7 @@ The `JsonTransport` trait in `src/telegram/transport.rs` is the Rust boundary fo
 
 ## Worker responsibilities
 
-The backend worker—not GTK—must own the transport and be the only caller of its receive operation. It is responsible for:
+`BackendWorker` in `src/telegram/worker.rs` owns its `JsonTransport` on a dedicated thread and is the only caller of its receive operation. It never touches GTK; the application must forward its events to the GLib main context. It is responsible for:
 
 1. Accepting application commands and serializing TDLib requests.
 2. Adding a unique Telestra `@extra` to each request that expects a response.
@@ -47,10 +47,10 @@ The transport, lifecycle, request correlation, decoder and event types are delib
 - TDLib error code/message conversion.
 - Unknown future authorization states.
 - Close request followed by continued receive until the closed authorization state.
-- Receive-loop failure draining pending operations.
+- Receive-loop failure and clean shutdown both draining pending operations.
 - One receive owner per client and no GTK access from the worker.
 
-The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, and lifecycle transitions. The background worker, native FFI, native package integration and end-to-end shutdown handshake remain unimplemented.
+The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, lifecycle transitions, worker response correlation, rejected request envelopes, receive failures and close confirmation. Native FFI, native package integration, GLib main-context handoff and end-to-end Telegram connectivity remain unimplemented.
 
 ## Native build gate
 

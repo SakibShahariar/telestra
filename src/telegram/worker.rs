@@ -10,6 +10,7 @@ use super::{
     JsonTransport, RequestId, TransportError, decode_message,
 };
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -43,7 +44,11 @@ pub enum WorkerEvent {
         operation: String,
         error: TransportError,
     },
-    /// An operation remained pending when the worker became unusable.
+    /// A received message could not be decoded as a TDLib JSON envelope.
+    ProtocolFailed {
+        message: String,
+    },
+    /// An operation remained pending when the worker became unusable or closed.
     PendingFailed {
         request_id: RequestId,
         operation: String,
@@ -61,6 +66,7 @@ pub struct BackendWorker {
     commands: Sender<WorkerCommand>,
     events: Receiver<WorkerEvent>,
     thread: Option<JoinHandle<()>>,
+    shutdown_requested: Mutex<bool>,
 }
 
 impl BackendWorker {
@@ -76,6 +82,7 @@ impl BackendWorker {
             commands: command_tx,
             events: event_rx,
             thread: Some(thread),
+            shutdown_requested: Mutex::new(false),
         })
     }
 
@@ -89,6 +96,10 @@ impl BackendWorker {
         operation: impl Into<String>,
         json: impl Into<String>,
     ) -> Result<(), mpsc::SendError<()>> {
+        let shutdown_requested = self.shutdown_requested.lock().unwrap();
+        if *shutdown_requested {
+            return Err(mpsc::SendError(()));
+        }
         self.commands
             .send(WorkerCommand::Request {
                 request_id,
@@ -101,6 +112,11 @@ impl BackendWorker {
     /// Requests orderly shutdown. The worker keeps receiving until TDLib
     /// confirms `authorizationStateClosed`.
     pub fn shutdown(&self) -> Result<(), mpsc::SendError<()>> {
+        let mut shutdown_requested = self.shutdown_requested.lock().unwrap();
+        if *shutdown_requested {
+            return Err(mpsc::SendError(()));
+        }
+        *shutdown_requested = true;
         self.commands
             .send(WorkerCommand::Shutdown)
             .map_err(|_| mpsc::SendError(()))
@@ -211,17 +227,27 @@ fn run_worker<T: JsonTransport>(
                         completed_operation,
                     });
 
-                    if shutdown_requested
-                        && closed
-                        && lifecycle
+                    if shutdown_requested && closed {
+                        if lifecycle
                             .observe_authorization_state(&AuthorizationState::Closed)
                             .is_err()
-                    {
-                        lifecycle.fail();
+                        {
+                            lifecycle.fail();
+                        } else {
+                            fail_pending(
+                                &mut router,
+                                &events,
+                                "TDLib closed before the operation received a response",
+                            );
+                        }
                     }
                 }
                 Err(error) => {
-                    fail_worker(&mut lifecycle, &mut router, &events, error.to_string());
+                    let reason = error.to_string();
+                    let _ = events.send(WorkerEvent::ProtocolFailed {
+                        message: reason.clone(),
+                    });
+                    fail_worker(&mut lifecycle, &mut router, &events, reason);
                     break;
                 }
             },
@@ -256,11 +282,19 @@ fn fail_worker(
     reason: String,
 ) {
     lifecycle.fail();
+    fail_pending(router, events, &reason);
+}
+
+fn fail_pending(
+    router: &mut EventRouter<String>,
+    events: &Sender<WorkerEvent>,
+    reason: &str,
+) {
     for (request_id, operation) in router.drain_pending() {
         let _ = events.send(WorkerEvent::PendingFailed {
             request_id,
             operation,
-            reason: reason.clone(),
+            reason: reason.to_owned(),
         });
     }
 }

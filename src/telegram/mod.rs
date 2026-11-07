@@ -2,8 +2,9 @@
 //!
 //! Keep TDLib-specific requests, update objects and runtime ownership behind
 //! this module. Transport-independent JSON decoding, event routing, request
-//! correlation and lifecycle primitives are implemented here; the native
-//! TDLib runtime and background worker are not yet connected.
+//! correlation, lifecycle primitives and a transport-owning background worker
+//! are implemented here; the native TDLib transport and GTK event handoff are
+//! not yet connected.
 
 mod decoder;
 mod events;
