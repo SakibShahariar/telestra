@@ -1,6 +1,6 @@
 # Architecture direction
 
-**Status:** Initial proposal. This document records constraints and a direction, not a claim that these components have been implemented.
+**Status:** Initial architecture with a minimal GTK4/libadwaita shell. The Telegram backend is not yet connected.
 
 ## Goals
 
@@ -13,13 +13,32 @@ Telestra should be a native-feeling Linux Telegram client with a clear separatio
 3. **Telegram adapter** — a narrow Rust-facing interface for authentication, updates, chats, messages, files and other TDLib operations.
 4. **TDLib runtime** — TDLib owns Telegram protocol details, synchronization and its managed local data.
 
-UI components should not construct raw TDLib requests directly. The adapter should translate between application-level operations and TDLib types, and should make backend behavior testable without a live Telegram account wherever practical.
+UI components should not construct raw TDLib requests directly. The adapter should translate between application-level operations and application-owned types, and should make backend behavior testable without a live Telegram account wherever practical.
 
-## TDLib integration
+## TDLib integration decision
 
-The initial integration should evaluate TDLib's JSON interface and the available Rust bindings before choosing an approach. The JSON interface is a reasonable interoperability baseline, but process/thread ownership, FFI safety, event delivery, error handling and packaging must be tested before committing to it.
+**Protocol boundary: TDLib JSON interface.** TDLib's official documentation recommends the JSON interface for most use cases and describes the API as fully asynchronous. Requests and responses are correlated with the `@extra` field, while updates carry essential state changes. The adapter must therefore own request correlation, update dispatch, error conversion and orderly shutdown; none of these details belong in GTK widgets.
 
-TDLib is asynchronous. Its updates must be consumed without blocking GTK's main thread. Define explicit ownership and shutdown behavior for the TDLib client, event receiver and background tasks.
+**Rust transport implementation: still under evaluation.** The `tdlib-rs` crate is a promising candidate: its 1.4.0 release documents support for TDLib 1.8.61, generated Rust types, and build modes including precompiled Linux x86_64/ARM64 libraries. It is not adopted yet. Before selecting it, a small integration spike must verify:
+- Build reproducibility on the supported Linux targets.
+- How the native TDLib library is packaged and discovered at runtime, especially in Flatpak.
+- License compatibility and the exact upstream maintenance/release process.
+- Client ownership, update delivery, cancellation and shutdown behavior.
+- Whether the wrapper exposes the TDLib methods needed for transfers without hiding important capabilities.
+
+If the wrapper cannot meet those requirements, use the JSON interface through a small audited FFI layer rather than coupling the rest of the application to a third-party wrapper.
+
+TDLib remains asynchronous. Its updates must be consumed without blocking GTK's main thread. Background runtime ownership and shutdown must be explicit, and GTK-facing state changes must be marshalled onto the main context.
+
+## Rust and desktop dependency baseline
+
+- Rust edition: 2024; minimum Rust version: 1.85.
+- GTK4 Rust bindings: 0.11.x.
+- libadwaita Rust bindings: 0.9.x.
+- CI baseline: Ubuntu 24.04 with GTK4 and libadwaita development packages.
+- Use the gtk-rs/libadwaita versions together; their GLib-family dependencies must remain compatible.
+
+The application shell currently uses these bindings only. No TDLib dependency is linked yet.
 
 ## Data and security
 
@@ -43,13 +62,13 @@ A unified media library may index metadata from chats and local files, but shoul
 - Keep layouts adaptive and avoid GNOME-only assumptions in core workflows.
 - Use platform-native notifications and desktop integration where available, with graceful fallbacks.
 
-## Decisions still open
+## Remaining decisions
 
-- TDLib JSON interface versus a maintained Rust binding or a small audited FFI layer.
-- Minimum supported GTK4/libadwaita and Rust versions.
+- Final TDLib Rust transport choice after the integration spike.
+- Exact minimum system GTK4/libadwaita versions and supported Linux distributions.
 - Account data and cache locations, backup and migration policy.
 - Translation/localization framework.
 - Flatpak permissions and distribution strategy.
 - Test strategy for TDLib integration and GUI behavior.
 
-These decisions should be recorded here when supported by a small technical investigation or prototype.
+Record further decisions here when supported by a small technical investigation or prototype.
