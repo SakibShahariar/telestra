@@ -4,9 +4,11 @@
 //! this module. The concrete adapter will be added after its build and
 //! lifecycle behavior has been verified.
 
+mod lifecycle;
 mod protocol;
 mod transport;
 
+pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
 pub use transport::{JsonTransport, TransportError, TransportOperation};
 
