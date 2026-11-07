@@ -440,7 +440,6 @@ mod tests {
         worker.join().unwrap();
     }
 
-
     #[test]
     fn worker_fails_pending_operations_when_tdlib_closes() {
         let request_id = RequestId::new(75);
@@ -472,7 +471,10 @@ mod tests {
             }
         ));
         assert!(matches!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::PendingFailed {
                 request_id: failed,
                 operation,
@@ -480,7 +482,10 @@ mod tests {
             } if failed == request_id && operation == "load-chats"
         ));
         assert_eq!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::Stopped(ClientLifecycle::Closed)
         );
         assert_eq!(sent.lock().unwrap().len(), 1);
@@ -506,7 +511,10 @@ mod tests {
                 .is_err()
         );
         assert!(matches!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::Backend {
                 event: crate::telegram::BackendEvent::AuthorizationStateChanged(
                     AuthorizationState::Closed
@@ -515,7 +523,10 @@ mod tests {
             }
         ));
         assert_eq!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::Stopped(ClientLifecycle::Closed)
         );
         worker.join().unwrap();
