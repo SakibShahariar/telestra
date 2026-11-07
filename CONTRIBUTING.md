@@ -28,7 +28,7 @@ Thanks for your interest in Telestra. The project is at an early stage, so discu
 
 ## Validation
 
-Run the formatting, linting and test commands documented in the README before submitting changes. Report checks that could not be run and why; do not imply unrun checks passed.
+Run the formatting, linting and test commands documented in the README before submitting changes. CI uses the committed `Cargo.lock` with locked dependency resolution. When intentionally changing dependencies, regenerate the lockfile with Cargo, review the complete dependency diff, and commit the manifest and lockfile together. Report checks that could not be run and why; do not imply unrun checks passed.
 
 ## Reporting a bug
 
