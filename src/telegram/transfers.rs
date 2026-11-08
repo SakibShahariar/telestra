@@ -709,9 +709,14 @@ impl fmt::Display for TransferHydrationError {
             Self::AlreadyActive => formatter.write_str("download-list hydration is already active"),
             Self::NotActive => formatter.write_str("download-list hydration has not started"),
             Self::RepeatedCursor(cursor) => {
-                write!(formatter, "TDLib repeated a download-list cursor: {cursor:?}")
+                write!(
+                    formatter,
+                    "TDLib repeated a download-list cursor: {cursor:?}"
+                )
             }
-            Self::Queue(error) => write!(formatter, "could not restore download-list page: {error}"),
+            Self::Queue(error) => {
+                write!(formatter, "could not restore download-list page: {error}")
+            }
         }
     }
 }
@@ -743,10 +748,7 @@ pub struct TransferListHydrator {
 
 impl TransferListHydrator {
     /// Starts a new hydration window and returns the initial empty cursor.
-    pub fn begin(
-        &mut self,
-        queue: &mut TransferQueue,
-    ) -> Result<String, TransferHydrationError> {
+    pub fn begin(&mut self, queue: &mut TransferQueue) -> Result<String, TransferHydrationError> {
         if self.active {
             return Err(TransferHydrationError::AlreadyActive);
         }
@@ -1292,9 +1294,7 @@ mod tests {
 
     #[test]
     fn hydrator_rejects_pages_before_beginning() {
-        use super::{
-            TransferHydrationError, TransferListHydrator, TransferListPage,
-        };
+        use super::{TransferHydrationError, TransferListHydrator, TransferListPage};
 
         let mut queue = TransferQueue::new();
         let mut hydrator = TransferListHydrator::default();
