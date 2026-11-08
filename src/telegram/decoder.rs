@@ -865,6 +865,18 @@ mod tests {
     }
 
     #[test]
+    fn decodes_empty_final_download_list_page() {
+        use super::decode_transfer_list_page;
+
+        let page = decode_transfer_list_page(
+            r#"{"@type":"foundFileDownloads","total_counts":{"active_count":0,"paused_count":0,"completed_count":0},"files":[],"next_offset":""}"#,
+        )
+        .unwrap();
+        assert!(page.files.is_empty());
+        assert!(!page.has_more());
+    }
+
+    #[test]
     fn rejects_incomplete_or_wrong_download_list_responses() {
         use super::decode_transfer_list_page;
 
