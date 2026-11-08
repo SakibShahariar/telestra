@@ -103,6 +103,25 @@ References:
 - [downloadFile priority](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1download_file.html)
 - [addFileToDownloads priority](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1add_file_to_downloads.html)
 
+## Bandwidth limits (issue #19)
+
+The pinned TDLib integration currently has no documented per-client bytes-per-second setting for either uploads or downloads in TDLib's public option catalog. TDLib does expose transfer progress and may notify when Telegram limits a user's upload or download speed; the Premium-related speedup options are informational and are not controls that Telestra can override.
+
+Consequences:
+
+- Do not promise a strict upload or download bandwidth cap through TDLib's JSON API.
+- Lowering concurrency can reduce aggregate pressure, but it is not equivalent to a bytes-per-second limit.
+- Delaying the start of additional transfers is an app-side scheduling policy, not a hard cap on transfers already running.
+- Do not attempt to bypass Telegram/Premium server-side speed restrictions.
+- A true per-direction bandwidth limiter would require a supported lower-level throttling hook or an external OS/network traffic-shaping mechanism. The latter is not appropriate as an implicit application behavior.
+
+For now, treat separate upload/download bandwidth limits as unsupported by the current TDLib public API. Revisit only if TDLib adds a supported throttle control or the product explicitly accepts an external system-level integration.
+
+References:
+- [TDLib options catalog](https://core.telegram.org/tdlib/options)
+- [TDLib updateSpeedLimitNotification](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1update_speed_limit_notification.html)
+- [Telegram file transfer documentation](https://core.telegram.org/api/files)
+
 ## Verification plan
 
 - Unit-test queue state transitions with fake TDLib events: queued, active, paused, resumed, completed, canceled, and removed.
