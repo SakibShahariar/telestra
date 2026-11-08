@@ -1093,11 +1093,13 @@ mod tests {
             }));
         }
         for is_paused in [true, false] {
-            assert!(!queue.apply_tdlib_update(TransferUpdate::DownloadListChanged {
-                file_id: 49,
-                complete_date: 0,
-                is_paused,
-            }));
+            assert!(
+                !queue.apply_tdlib_update(TransferUpdate::DownloadListChanged {
+                    file_id: 49,
+                    complete_date: 0,
+                    is_paused,
+                })
+            );
         }
 
         assert_eq!(queue.pending_live_updates.get(&49).unwrap().len(), 2);
