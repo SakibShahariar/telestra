@@ -20,7 +20,7 @@ pub use tdlib_ffi::{TdJsonError, TdJsonLibrary};
 
 pub use decoder::{
     DecodeError, DecodedEnvelope, DecodedMessage, decode_envelope, decode_message,
-    decode_transfer_update,
+    decode_transfer_list_page, decode_transfer_update,
 };
 pub use dispatcher::{
     AccountMailboxTransport, ClientMailboxRegistry, ClientRequestSender, DispatchError,
@@ -30,7 +30,7 @@ pub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEve
 pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
 pub use transfers::{
-    FileTransferState, TransferCommand, TransferItem, TransferProgress, TransferQueue,
+    DownloadListEntry, DownloadedFileCounts, FileTransferState, TransferCommand, TransferItem,\n    TransferListPage, TransferProgress, TransferQueue,
     TransferQueueError, TransferStatus, TransferUpdate,
 };
 pub use transport::{JsonTransport, TransportError, TransportOperation};
