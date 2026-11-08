@@ -107,6 +107,16 @@ pub enum TransferCommand {
 }
 
 impl TransferCommand {
+    /// Returns the TDLib operation name used for worker diagnostics.
+    pub const fn operation_name(&self) -> &'static str {
+        match self {
+            Self::AddToDownloads { .. } => "addFileToDownloads",
+            Self::TogglePaused { .. } => "toggleDownloadIsPaused",
+            Self::ToggleAllPaused { .. } => "toggleAllDownloadsArePaused",
+            Self::RemoveFromDownloads { .. } => "removeFileFromDownloads",
+        }
+    }
+
     /// Serializes this intent as a TDLib JSON request with worker correlation.
     ///
     /// All fields are numeric or boolean, and the request ID's extra value is

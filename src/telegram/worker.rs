@@ -7,7 +7,7 @@
 
 use super::{
     AuthorizationState, BackendEvent, ClientLifecycle, ClientState, DecodedMessage, EventRouter,
-    JsonTransport, RequestId, TransportError, decode_message,
+    JsonTransport, RequestId, TransferCommand, TransportError, decode_message,
 };
 use std::sync::Mutex;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -105,6 +105,19 @@ impl BackendWorker {
                 json: json.into(),
             })
             .map_err(|_| mpsc::SendError(()))
+    }
+
+    /// Sends a typed download-queue intent through the same correlated worker path.
+    pub fn send_transfer_command(
+        &self,
+        request_id: RequestId,
+        command: &TransferCommand,
+    ) -> Result<(), mpsc::SendError<()>> {
+        self.send_request(
+            request_id,
+            command.operation_name(),
+            command.to_tdlib_json(request_id),
+        )
     }
 
     /// Requests orderly shutdown. The worker keeps receiving until TDLib
@@ -418,6 +431,56 @@ mod tests {
                 .events()
                 .recv_timeout(Duration::from_secs(2))
                 .unwrap(),
+            WorkerEvent::Stopped(ClientLifecycle::Closed)
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn worker_sends_transfer_commands_with_request_correlation() {
+        use crate::telegram::TransferCommand;
+
+        let request_id = RequestId::new(79);
+        let response = format!(r#"{{"@type":"ok","@extra":"{}"}}"#, request_id.to_extra());
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let transport = FakeTransport {
+            incoming: VecDeque::from([response]),
+            sent: Arc::clone(&sent),
+        };
+        let worker = BackendWorker::spawn(transport).unwrap();
+        let command = TransferCommand::AddToDownloads {
+            file_id: 42,
+            chat_id: -100,
+            message_id: 9,
+            priority: 16,
+        };
+
+        worker.send_transfer_command(request_id, &command).unwrap();
+
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![command.to_tdlib_json(request_id)]
+        );
+        assert!(matches!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            WorkerEvent::Backend {
+                completed_operation: Some((id, operation)),
+                ..
+            } if id == request_id && operation == "addFileToDownloads"
+        ));
+
+        worker.shutdown().unwrap();
+        assert!(matches!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            WorkerEvent::Backend {
+                event: crate::telegram::BackendEvent::AuthorizationStateChanged(
+                    AuthorizationState::Closed
+                ),
+                ..
+            }
+        ));
+        assert_eq!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
             WorkerEvent::Stopped(ClientLifecycle::Closed)
         );
         worker.join().unwrap();
