@@ -49,7 +49,7 @@ pub struct TransferItem {
     file_id: i32,
     chat_id: i64,
     message_id: i64,
-    priority: u8,
+    priority: Option<u8>,
     status: TransferStatus,
     progress: TransferProgress,
 }
@@ -67,7 +67,7 @@ impl TransferItem {
         self.message_id
     }
 
-    pub const fn priority(&self) -> u8 {
+    pub const fn priority(&self) -> Option<u8> {
         self.priority
     }
 
@@ -175,7 +175,7 @@ impl TransferQueue {
                 file_id,
                 chat_id,
                 message_id,
-                priority,
+                priority: Some(priority),
                 status: TransferStatus::Queued,
                 progress: TransferProgress::default(),
             },
@@ -188,6 +188,47 @@ impl TransferQueue {
             message_id,
             priority,
         })
+    }
+
+    /// Restores an item returned by TDLib's initial `searchFileDownloads` query.
+    ///
+    /// TDLib's `fileDownload` object does not include its original priority,
+    /// so restored items deliberately expose `None` rather than inventing one.
+    pub fn restore_message_attachment(
+        &mut self,
+        file_id: i32,
+        chat_id: i64,
+        message_id: i64,
+        complete_date: i32,
+        is_paused: bool,
+    ) -> Result<(), TransferQueueError> {
+        if file_id <= 0 {
+            return Err(TransferQueueError::InvalidFileId(file_id));
+        }
+        if self.items.contains_key(&file_id) {
+            return Err(TransferQueueError::DuplicateFileId(file_id));
+        }
+
+        let status = if complete_date > 0 {
+            TransferStatus::Completed
+        } else if is_paused {
+            TransferStatus::Paused
+        } else {
+            TransferStatus::Queued
+        };
+        self.items.insert(
+            file_id,
+            TransferItem {
+                file_id,
+                chat_id,
+                message_id,
+                priority: None,
+                status,
+                progress: TransferProgress::default(),
+            },
+        );
+        self.insertion_order.push(file_id);
+        Ok(())
     }
 
     /// Requests pause or resume for one list-managed item.
@@ -364,7 +405,7 @@ mod tests {
         );
         let item = queue.get(42).unwrap();
         assert_eq!(item.status(), &TransferStatus::Queued);
-        assert_eq!(item.priority(), 16);
+        assert_eq!(item.priority(), Some(16));
         assert_eq!(item.progress(), TransferProgress::default());
     }
 
@@ -387,6 +428,20 @@ mod tests {
             queue.enqueue_message_attachment(0, -100, 9, 1),
             Err(TransferQueueError::InvalidFileId(0))
         );
+    }
+
+    #[test]
+    fn restores_persistent_items_without_inventing_priority() {
+        let mut queue = TransferQueue::new();
+        queue
+            .restore_message_attachment(55, -100, 88, 0, true)
+            .unwrap();
+
+        let item = queue.get(55).unwrap();
+        assert_eq!(item.priority(), None);
+        assert_eq!(item.status(), &TransferStatus::Paused);
+        assert_eq!(item.chat_id(), -100);
+        assert_eq!(item.message_id(), 88);
     }
 
     #[test]
