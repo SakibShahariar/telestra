@@ -27,7 +27,7 @@ if [[ ! -d "$source_dir/.git" ]]; then
     git -C "$source_dir" checkout --detach "$TDLIB_GIT_COMMIT"
 fi
 
-"$script_dir/verify-tdlib-source.sh" "$source_dir"
+bash "$script_dir/verify-tdlib-source.sh" "$source_dir"
 
 cmake -S "$source_dir" -B "$build_dir" \
     -DCMAKE_BUILD_TYPE=Release \
