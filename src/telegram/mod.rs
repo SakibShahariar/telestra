@@ -18,7 +18,10 @@ mod worker;
 
 pub use tdlib_ffi::{TdJsonError, TdJsonLibrary};
 
-pub use decoder::{DecodeError, DecodedEnvelope, DecodedMessage, decode_envelope, decode_message};
+pub use decoder::{
+    DecodeError, DecodedEnvelope, DecodedMessage, decode_envelope, decode_message,
+    decode_transfer_update,
+};
 pub use dispatcher::{
     AccountMailboxTransport, ClientMailboxRegistry, ClientRequestSender, DispatchError,
     NativeTdLibReceiveSource, NativeTdLibRequestSender, SharedDispatcher, SharedReceiveSource,
@@ -28,7 +31,7 @@ pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
 pub use transfers::{
     FileTransferState, TransferCommand, TransferItem, TransferProgress, TransferQueue,
-    TransferQueueError, TransferStatus,
+    TransferQueueError, TransferStatus, TransferUpdate,
 };
 pub use transport::{JsonTransport, TransportError, TransportOperation};
 pub use worker::{BackendWorker, WorkerEvent};

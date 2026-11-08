@@ -152,6 +152,104 @@ pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
     decode_envelope(json).map(|envelope| envelope.message)
 }
 
+/// Decodes the TDLib file-transfer updates consumed by the download queue.
+///
+/// Unrelated update types return `Ok(None)`; malformed or incomplete transfer
+/// updates return a decoding error instead of silently changing queue state.
+pub fn decode_transfer_update(json: &str) -> Result<Option<TransferUpdate>, DecodeError> {
+    let mut parser = Parser {
+        input: json.as_bytes(),
+        offset: 0,
+    };
+    let value = parser.parse_value(0)?;
+    parser.skip_whitespace();
+    if parser.offset != parser.input.len() {
+        return Err(parser.error("trailing data after JSON value"));
+    }
+    let object = match value {
+        Value::Object(object) => object,
+        _ => return Err(parser.error("TDLib update must be a JSON object")),
+    };
+    let kind = object
+        .get("@type")
+        .and_then(Value::as_str)
+        .ok_or_else(|| parser.error("TDLib update is missing string @type"))?;
+
+    let required_i64 = |field: &'static str| {
+        object
+            .get(field)
+            .and_then(Value::as_i64)
+            .ok_or_else(|| parser.error("TDLib transfer update is missing an integer field"))
+    };
+    match kind {
+        "updateFileDownload" => {
+            let file_id = i32::try_from(required_i64("file_id")?)
+                .map_err(|_| parser.error("TDLib transfer file_id is out of range"))?;
+            let complete_date = i32::try_from(required_i64("complete_date")?)
+                .map_err(|_| parser.error("TDLib transfer complete_date is out of range"))?;
+            let is_paused = object
+                .get("is_paused")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| parser.error("TDLib transfer update is missing boolean is_paused"))?;
+            Ok(Some(TransferUpdate::DownloadListChanged {
+                file_id,
+                complete_date,
+                is_paused,
+            }))
+        }
+        "updateFileRemovedFromDownloads" => {
+            let file_id = i32::try_from(required_i64("file_id")?)
+                .map_err(|_| parser.error("TDLib transfer file_id is out of range"))?;
+            Ok(Some(TransferUpdate::RemovedFromDownloads { file_id }))
+        }
+        "updateFile" => {
+            let file = object
+                .get("file")
+                .and_then(Value::as_object)
+                .ok_or_else(|| parser.error("updateFile is missing object file"))?;
+            let file_id = file
+                .get("id")
+                .and_then(Value::as_i64)
+                .and_then(|value| i32::try_from(value).ok())
+                .ok_or_else(|| parser.error("updateFile has an invalid file.id"))?;
+            let expected_size = file
+                .get("expected_size")
+                .and_then(Value::as_i64)
+                .and_then(|value| u64::try_from(value).ok())
+                .ok_or_else(|| parser.error("updateFile has an invalid file.expected_size"))?;
+            let local = file
+                .get("local")
+                .and_then(Value::as_object)
+                .ok_or_else(|| parser.error("updateFile is missing object file.local"))?;
+            let required_local_bool = |field: &'static str| {
+                local
+                    .get(field)
+                    .and_then(Value::as_bool)
+                    .ok_or_else(|| parser.error("updateFile local state is missing a boolean field"))
+            };
+            let required_local_size = |field: &'static str| {
+                local
+                    .get(field)
+                    .and_then(Value::as_i64)
+                    .and_then(|value| u64::try_from(value).ok())
+                    .ok_or_else(|| parser.error("updateFile local state has an invalid size field"))
+            };
+            Ok(Some(TransferUpdate::FileStateChanged {
+                file_id,
+                state: FileTransferState {
+                    is_downloading_active: required_local_bool("is_downloading_active")?,
+                    is_downloading_completed: required_local_bool("is_downloading_completed")?,
+                    download_offset: required_local_size("download_offset")?,
+                    downloaded_prefix_size: required_local_size("downloaded_prefix_size")?,
+                    downloaded_size: required_local_size("downloaded_size")?,
+                    expected_size,
+                },
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
 fn decode_authorization_state(state: &str) -> AuthorizationState {
     match state {
         "authorizationStateWaitTdlibParameters" => AuthorizationState::WaitTdlibParameters,

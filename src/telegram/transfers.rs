@@ -148,6 +148,23 @@ impl TransferCommand {
     }
 }
 
+/// Authoritative TDLib updates that can change a download queue item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TransferUpdate {
+    DownloadListChanged {
+        file_id: i32,
+        complete_date: i32,
+        is_paused: bool,
+    },
+    FileStateChanged {
+        file_id: i32,
+        state: FileTransferState,
+    },
+    RemovedFromDownloads {
+        file_id: i32,
+    },
+}
+
 /// Errors returned when a transfer intent cannot be represented safely.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransferQueueError {
@@ -329,6 +346,25 @@ impl TransferQueue {
             file_id,
             delete_from_cache: false,
         })
+    }
+
+    /// Applies a decoded authoritative TDLib update to the queue.
+    ///
+    /// Returns false when the update refers to an item not currently tracked.
+    pub fn apply_tdlib_update(&mut self, update: TransferUpdate) -> bool {
+        match update {
+            TransferUpdate::DownloadListChanged {
+                file_id,
+                complete_date,
+                is_paused,
+            } => self.apply_download_list_update(file_id, complete_date, is_paused),
+            TransferUpdate::FileStateChanged { file_id, state } => {
+                self.apply_file_state(file_id, state)
+            }
+            TransferUpdate::RemovedFromDownloads { file_id } => {
+                self.apply_removed(file_id).is_some()
+            }
+        }
     }
 
     /// Applies TDLib's file-download-list update.
