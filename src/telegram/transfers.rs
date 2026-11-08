@@ -307,6 +307,24 @@ impl TransferQueue {
         self.hydration_in_progress = false;
     }
 
+    fn remember_live_update(&mut self, update: TransferUpdate) {
+        let file_id = match &update {
+            TransferUpdate::AddedToDownloads { file_id, .. }
+            | TransferUpdate::DownloadListChanged { file_id, .. }
+            | TransferUpdate::FileStateChanged { file_id, .. }
+            | TransferUpdate::RemovedFromDownloads { file_id } => *file_id,
+        };
+        let updates = self.pending_live_updates.entry(file_id).or_default();
+        let update_kind = std::mem::discriminant(&update);
+        if let Some(index) = updates
+            .iter()
+            .rposition(|existing| std::mem::discriminant(existing) == update_kind)
+        {
+            updates.remove(index);
+        }
+        updates.push(update);
+    }
+
     /// Adds a message attachment to the local view and returns the TDLib intent.
     ///
     /// The returned command must be sent to TDLib. The queue item remains
@@ -516,13 +534,16 @@ impl TransferQueue {
                     )
                     .is_ok()
                 {
-                    // An explicit add is newer than any earlier removal
-                    // tombstone. Retain useful file-state updates that preceded
-                    // the add, but never replay an earlier removal over it.
-                    for update in pending_updates {
-                        if !matches!(update, TransferUpdate::RemovedFromDownloads { .. }) {
-                            self.apply_tdlib_update(update);
-                        }
+                    // An explicit add supersedes earlier removal. Only
+                    // replay updates that arrived after the last removal.
+                    let replay_from = pending_updates
+                        .iter()
+                        .rposition(|update| {
+                            matches!(update, TransferUpdate::RemovedFromDownloads { .. })
+                        })
+                        .map_or(0, |index| index + 1);
+                    for update in pending_updates.into_iter().skip(replay_from) {
+                        self.apply_tdlib_update(update);
                     }
                     true
                 } else {
@@ -537,13 +558,11 @@ impl TransferQueue {
                 if self.items.contains_key(&file_id) {
                     self.apply_download_list_update(file_id, complete_date, is_paused)
                 } else if self.hydration_in_progress {
-                    self.pending_live_updates.entry(file_id).or_default().push(
-                        TransferUpdate::DownloadListChanged {
-                            file_id,
-                            complete_date,
-                            is_paused,
-                        },
-                    );
+                    self.remember_live_update(TransferUpdate::DownloadListChanged {
+                        file_id,
+                        complete_date,
+                        is_paused,
+                    });
                     false
                 } else {
                     false
@@ -553,10 +572,10 @@ impl TransferQueue {
                 if self.items.contains_key(&file_id) {
                     self.apply_file_state(file_id, state)
                 } else if self.hydration_in_progress {
-                    self.pending_live_updates
-                        .entry(file_id)
-                        .or_default()
-                        .push(TransferUpdate::FileStateChanged { file_id, state });
+                    self.remember_live_update(TransferUpdate::FileStateChanged {
+                        file_id,
+                        state,
+                    });
                     false
                 } else {
                     false
@@ -564,12 +583,17 @@ impl TransferQueue {
             }
             TransferUpdate::RemovedFromDownloads { file_id } => {
                 if self.items.contains_key(&file_id) {
-                    self.apply_removed(file_id).is_some()
+                    let removed = self.apply_removed(file_id).is_some();
+                    if removed && self.hydration_in_progress {
+                        self.remember_live_update(TransferUpdate::RemovedFromDownloads {
+                            file_id,
+                        });
+                    }
+                    removed
                 } else if self.hydration_in_progress {
-                    self.pending_live_updates
-                        .entry(file_id)
-                        .or_default()
-                        .push(TransferUpdate::RemovedFromDownloads { file_id });
+                    self.remember_live_update(TransferUpdate::RemovedFromDownloads {
+                        file_id,
+                    });
                     false
                 } else {
                     false
@@ -1026,6 +1050,34 @@ mod tests {
         assert_eq!(queue.restore_page(&stale_snapshot), Ok(0));
         assert!(queue.get(45).is_none());
         assert!(queue.is_empty());
+        queue.finish_hydration();
+    }
+
+    #[test]
+    fn removal_of_a_restored_item_tombstones_later_snapshot_pages() {
+        use super::{DownloadListEntry, TransferListPage, TransferUpdate};
+
+        let mut queue = TransferQueue::new();
+        queue.begin_hydration();
+        let first_page = TransferListPage {
+            files: vec![DownloadListEntry {
+                file_id: 48,
+                chat_id: 1,
+                message_id: 2,
+                add_date: 0,
+                complete_date: 0,
+                is_paused: false,
+            }],
+            ..TransferListPage::default()
+        };
+        assert_eq!(queue.restore_page(&first_page), Ok(1));
+        assert!(queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads {
+            file_id: 48,
+        }));
+
+        // A later/stale page must not resurrect the item removed after page one.
+        assert_eq!(queue.restore_page(&first_page), Ok(0));
+        assert!(queue.get(48).is_none());
         queue.finish_hydration();
     }
 
