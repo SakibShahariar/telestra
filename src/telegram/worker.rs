@@ -10,7 +10,7 @@ use super::{
     JsonTransport, RequestId, TransportError, decode_message,
 };
 use std::sync::Mutex;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -62,7 +62,7 @@ pub enum WorkerEvent {
 /// but received events must still be dispatched onto the GLib main context.
 pub struct BackendWorker {
     commands: Sender<WorkerCommand>,
-    events: Receiver<WorkerEvent>,
+    events: Option<Receiver<WorkerEvent>>,
     thread: Option<JoinHandle<()>>,
     shutdown_requested: Mutex<bool>,
 }
@@ -78,7 +78,7 @@ impl BackendWorker {
 
         Ok(Self {
             commands: command_tx,
-            events: event_rx,
+            events: Some(event_rx),
             thread: Some(thread),
             shutdown_requested: Mutex::new(false),
         })
@@ -121,8 +121,27 @@ impl BackendWorker {
     }
 
     /// Receives the next worker event in delivery order.
+    ///
+    /// This receiver is unavailable after `attach_events` transfers it to
+    /// the GLib main-context bridge.
     pub fn events(&self) -> &Receiver<WorkerEvent> {
-        &self.events
+        self.events
+            .as_ref()
+            .expect("worker events were moved to the GLib main context")
+    }
+
+    /// Attaches worker events to the GLib default main context.
+    ///
+    /// Call this from the thread that owns the main context. The callback runs
+    /// on that context (and may update GTK); the backend thread never touches
+    /// UI objects. At most 128 queued events are handled per 16 ms tick so a
+    /// busy backend cannot starve other main-loop sources.
+    pub fn attach_events<F>(&mut self, callback: F) -> Option<glib::SourceId>
+    where
+        F: FnMut(WorkerEvent) + 'static,
+    {
+        let receiver = self.events.take()?;
+        Some(attach_event_receiver(receiver, callback))
     }
 
     /// Waits for the worker thread to finish.
@@ -140,6 +159,25 @@ impl Drop for BackendWorker {
     fn drop(&mut self) {
         let _ = self.commands.send(WorkerCommand::Shutdown);
     }
+}
+
+fn attach_event_receiver<F>(
+    receiver: Receiver<WorkerEvent>,
+    mut callback: F,
+) -> glib::SourceId
+where
+    F: FnMut(WorkerEvent) + 'static,
+{
+    glib::timeout_add_local(Duration::from_millis(16), move || {
+        for _ in 0..128 {
+            match receiver.try_recv() {
+                Ok(event) => callback(event),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => return glib::ControlFlow::Break,
+            }
+        }
+        glib::ControlFlow::Continue
+    })
 }
 
 fn run_worker<T: JsonTransport>(
@@ -724,5 +762,38 @@ mod tests {
             WorkerEvent::Stopped(ClientLifecycle::Failed)
         );
         worker.join().unwrap();
+    }
+
+    #[test]
+    fn attached_events_are_delivered_on_the_glib_main_context() {
+        use super::{attach_event_receiver, WorkerEvent};
+        use crate::telegram::ClientLifecycle;
+        use std::cell::Cell;
+        use std::rc::Rc;
+
+        let context = glib::MainContext::default();
+        let _context_guard = context.acquire().unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let main_thread = std::thread::current().id();
+        let observed = Rc::new(Cell::new(false));
+        let observed_in_callback = Rc::clone(&observed);
+
+        let _source = attach_event_receiver(receiver, move |event| {
+            assert_eq!(std::thread::current().id(), main_thread);
+            observed_in_callback.set(event == WorkerEvent::Stopped(ClientLifecycle::Closed));
+        });
+
+        std::thread::spawn(move || {
+            sender
+                .send(WorkerEvent::Stopped(ClientLifecycle::Closed))
+                .unwrap();
+        })
+        .join()
+        .unwrap();
+
+        while !observed.get() {
+            context.iteration(true);
+        }
+        assert!(observed.get());
     }
 }

@@ -612,6 +612,7 @@ version = "0.1.0"
 name = "telestra"
 version = "0.1.0"
 dependencies = [
+ "glib",
  "gtk4",
  "libadwaita",
  "tdlib-ffi",

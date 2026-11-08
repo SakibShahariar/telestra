@@ -4,8 +4,8 @@
 //! this module. Transport-independent JSON decoding, event routing, request
 //! correlation, lifecycle primitives and a transport-owning background worker
 //! are implemented here. The native TDLib C ABI loader and mailbox adapters
-//! are available; application startup composition and GTK event handoff are
-//! not yet connected.
+//! are available, including a tested GLib main-context event bridge;
+//! application startup composition and account workflows are not yet connected.
 
 mod decoder;
 mod dispatcher;

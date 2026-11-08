@@ -50,7 +50,7 @@ The transport, lifecycle, request correlation, decoder and event types are delib
 - Receive-loop failure and clean shutdown both draining pending operations.
 - One receive owner per client and no GTK access from the worker.
 
-The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, lifecycle transitions, worker response correlation, rejected request envelopes, malformed-message protocol failures, send/receive failures and close confirmation. The native FFI loader and native sender/receive adapters are implemented. The pinned source-build workflow is in place but its first clean build is still being verified. Application startup wiring, GLib main-context handoff, Flatpak/multi-architecture packaging and end-to-end Telegram connectivity remain outstanding.
+The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, lifecycle transitions, worker response correlation, rejected request envelopes, malformed-message protocol failures, send/receive failures and close confirmation. The native FFI loader and native sender/receive adapters are implemented. The pinned source-build workflow is in place but its first clean build is still being verified. Application startup/account-flow wiring, Flatpak/multi-architecture packaging and end-to-end Telegram connectivity remain outstanding. Worker events can now be polled on the GLib main context through a tested, non-blocking bridge.
 
 
 ## Reproducible native build
