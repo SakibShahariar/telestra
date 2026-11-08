@@ -40,6 +40,9 @@ jobs:
       - name: Build and verify TDLib
         run: scripts/build-tdlib.sh
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Exercise the native TDLib API through Rust FFI
         run: |
           library="$(find target/tdlib/lib -type f -name 'libtdjson.so*' -print -quit)"
