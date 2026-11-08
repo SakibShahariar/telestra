@@ -568,8 +568,8 @@ mod shared_dispatcher_tests {
 
     #[test]
     fn dropping_dispatcher_joins_the_receive_thread() {
-        use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
 
         struct DropObservedSource(Arc<AtomicBool>);
 
@@ -586,10 +586,8 @@ mod shared_dispatcher_tests {
         }
 
         let source_dropped = Arc::new(AtomicBool::new(false));
-        let dispatcher = SharedDispatcher::spawn(DropObservedSource(Arc::clone(
-            &source_dropped,
-        )))
-        .unwrap();
+        let dispatcher =
+            SharedDispatcher::spawn(DropObservedSource(Arc::clone(&source_dropped))).unwrap();
 
         drop(dispatcher);
 
