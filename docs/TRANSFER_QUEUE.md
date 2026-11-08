@@ -40,6 +40,23 @@ The pause APIs above are explicitly scoped to the file download list. Do not pre
 - The initial download list must be loaded before relying on subsequent `updateFileDownload` notifications; TDLib documents that these updates are sent only after the list is first loaded.
 - One file should not be scheduled as multiple concurrent ranges; TDLib maintainers state that only one concurrent download request per file is supported.
 
+## Concurrency limits (issue #16)
+
+TDLib and Telegram already define parallel-download limits per data center. Telegram's file API documentation says clients should limit parallel downloads from the same DC to the configured `small_queue_active_operations_max` for files smaller than 20 MB and `large_queue_active_operations_max` for files larger than 20 MB. These values are supplied as client configuration; they are not a license to exceed server limits.
+
+Implementation direction:
+
+- Let TDLib own the actual transfer scheduling wherever possible; do not create parallel range requests for the same file.
+- If Telestra adds an app-level concurrency preference, treat it as a lower client-side ceiling and clamp it to the current per-DC small/large limits.
+- Count active transfers per data center and size class, not just one global number.
+- Re-evaluate limits when TDLib configuration changes; never assume a fixed number is safe across accounts, DCs or versions.
+- Keep upload concurrency separate. The cited download limits do not establish upload limits.
+
+References:
+- [Telegram file transfer limits](https://core.telegram.org/api/files)
+- [TDLib autoDownloadSettings](https://core.telegram.org/constructor/autoDownloadSettings)
+- [TDLib options and configuration](https://core.telegram.org/tdlib/options)
+
 ## Verification plan
 
 - Unit-test queue state transitions with fake TDLib events: queued, active, paused, resumed, completed, canceled, and removed.
