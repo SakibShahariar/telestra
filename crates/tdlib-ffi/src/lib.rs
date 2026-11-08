@@ -76,7 +76,9 @@ mod dynamic {
 
     impl fmt::Debug for TdJsonLibrary {
         fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-            formatter.debug_struct("TdJsonLibrary").finish_non_exhaustive()
+            formatter
+                .debug_struct("TdJsonLibrary")
+                .finish_non_exhaustive()
         }
     }
 
@@ -97,9 +99,8 @@ mod dynamic {
 
             // SAFETY: each symbol is loaded with the exact function-pointer
             // signature declared by the pinned TDLib C header.
-            let create_client_id = unsafe {
-                load_symbol::<CreateClientId>(handle.0, c"td_create_client_id")?
-            };
+            let create_client_id =
+                unsafe { load_symbol::<CreateClientId>(handle.0, c"td_create_client_id")? };
             // SAFETY: signature matches void td_send(int, const char *).
             let send = unsafe { load_symbol::<SendRequest>(handle.0, c"td_send")? };
             // SAFETY: signature matches const char *td_receive(double).
