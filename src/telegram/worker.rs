@@ -161,10 +161,7 @@ impl Drop for BackendWorker {
     }
 }
 
-fn attach_event_receiver<F>(
-    receiver: Receiver<WorkerEvent>,
-    mut callback: F,
-) -> glib::SourceId
+fn attach_event_receiver<F>(receiver: Receiver<WorkerEvent>, mut callback: F) -> glib::SourceId
 where
     F: FnMut(WorkerEvent) + 'static,
 {
@@ -766,7 +763,7 @@ mod tests {
 
     #[test]
     fn attached_events_are_delivered_on_the_glib_main_context() {
-        use super::{attach_event_receiver, WorkerEvent};
+        use super::{WorkerEvent, attach_event_receiver};
         use crate::telegram::ClientLifecycle;
         use std::cell::Cell;
         use std::rc::Rc;
