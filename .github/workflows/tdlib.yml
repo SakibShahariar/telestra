@@ -45,6 +45,6 @@ jobs:
 
       - name: Exercise the native TDLib API through Rust FFI
         run: |
-          library="$(find target/tdlib/lib -type f -name 'libtdjson.so*' -print -quit)"
+          library="$(find "$GITHUB_WORKSPACE/target/tdlib/lib" -type f -name 'libtdjson.so*' -print -quit)"
           test -n "$library"
           TELESTRA_TDLIB_LIBRARY="$library" cargo test --manifest-path crates/tdlib-ffi/Cargo.toml --test tdlib_native_smoke
