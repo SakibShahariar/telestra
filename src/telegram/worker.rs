@@ -474,7 +474,10 @@ mod tests {
 
         worker.shutdown().unwrap();
         assert!(matches!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::Backend {
                 event: crate::telegram::BackendEvent::AuthorizationStateChanged(
                     AuthorizationState::Closed
