@@ -363,8 +363,8 @@ fn fail_pending(router: &mut EventRouter<String>, events: &Sender<WorkerEvent>, 
 mod tests {
     use super::{BackendWorker, WorkerEvent};
     use crate::telegram::{
-        AuthorizationState, ClientLifecycle, JsonTransport, RequestId, TransportError,
-        TransportOperation,
+        AuthorizationState, ClientLifecycle, JsonTransport, RequestId, TransferListPage,
+        TransportError, TransportOperation,
     };
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
