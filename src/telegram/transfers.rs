@@ -575,10 +575,7 @@ impl TransferQueue {
                 if self.items.contains_key(&file_id) {
                     self.apply_file_state(file_id, state)
                 } else if self.hydration_in_progress {
-                    self.remember_live_update(TransferUpdate::FileStateChanged {
-                        file_id,
-                        state,
-                    });
+                    self.remember_live_update(TransferUpdate::FileStateChanged { file_id, state });
                     false
                 } else {
                     false
@@ -588,15 +585,11 @@ impl TransferQueue {
                 if self.items.contains_key(&file_id) {
                     let removed = self.apply_removed(file_id).is_some();
                     if removed && self.hydration_in_progress {
-                        self.remember_live_update(TransferUpdate::RemovedFromDownloads {
-                            file_id,
-                        });
+                        self.remember_live_update(TransferUpdate::RemovedFromDownloads { file_id });
                     }
                     removed
                 } else if self.hydration_in_progress {
-                    self.remember_live_update(TransferUpdate::RemovedFromDownloads {
-                        file_id,
-                    });
+                    self.remember_live_update(TransferUpdate::RemovedFromDownloads { file_id });
                     false
                 } else {
                     false
@@ -1074,13 +1067,55 @@ mod tests {
             ..TransferListPage::default()
         };
         assert_eq!(queue.restore_page(&first_page), Ok(1));
-        assert!(queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads {
-            file_id: 48,
-        }));
+        assert!(queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads { file_id: 48 }));
 
         // A later/stale page must not resurrect the item removed after page one.
         assert_eq!(queue.restore_page(&first_page), Ok(0));
         assert!(queue.get(48).is_none());
+        queue.finish_hydration();
+    }
+
+    #[test]
+    fn coalesces_repeated_unknown_updates_during_hydration() {
+        use super::{DownloadListEntry, TransferListPage, TransferUpdate};
+
+        let mut queue = TransferQueue::new();
+        queue.begin_hydration();
+        for downloaded_size in [100, 200, 300] {
+            assert!(!queue.apply_tdlib_update(TransferUpdate::FileStateChanged {
+                file_id: 49,
+                state: FileTransferState {
+                    is_downloading_active: true,
+                    downloaded_size,
+                    expected_size: 1000,
+                    ..FileTransferState::default()
+                },
+            }));
+        }
+        for is_paused in [true, false] {
+            assert!(!queue.apply_tdlib_update(TransferUpdate::DownloadListChanged {
+                file_id: 49,
+                complete_date: 0,
+                is_paused,
+            }));
+        }
+
+        assert_eq!(queue.pending_live_updates.get(&49).unwrap().len(), 2);
+        let snapshot = TransferListPage {
+            files: vec![DownloadListEntry {
+                file_id: 49,
+                chat_id: 1,
+                message_id: 3,
+                add_date: 0,
+                complete_date: 0,
+                is_paused: false,
+            }],
+            ..TransferListPage::default()
+        };
+        assert_eq!(queue.restore_page(&snapshot), Ok(1));
+        let item = queue.get(49).unwrap();
+        assert_eq!(item.status(), &TransferStatus::Downloading);
+        assert_eq!(item.progress().downloaded_size, 300);
         queue.finish_hydration();
     }
 
