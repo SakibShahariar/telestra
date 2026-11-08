@@ -183,7 +183,8 @@ pub fn decode_transfer_list_page(json: &str) -> Result<TransferListPage, DecodeE
             .get(field)
             .and_then(Value::as_i64)
             .and_then(|value| i32::try_from(value).ok())
-            .ok_or_else(|| parser.error("download counts contain a missing or invalid field"))
+            .filter(|value| *value >= 0)
+            .ok_or_else(|| parser.error("download counts contain a missing, negative or invalid field"))
     };
     let total_counts = DownloadedFileCounts {
         active_count: count("active_count")?,
@@ -862,6 +863,16 @@ mod tests {
                 next_offset: "cursor-2".to_owned(),
             })
         );
+    }
+
+    #[test]
+    fn rejects_negative_download_list_counts() {
+        use super::decode_transfer_list_page;
+
+        assert!(decode_transfer_list_page(
+            r#"{"@type":"foundFileDownloads","total_counts":{"active_count":-1,"paused_count":0,"completed_count":0},"files":[],"next_offset":""}"#
+        )
+        .is_err());
     }
 
     #[test]
