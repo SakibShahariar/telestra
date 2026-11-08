@@ -155,9 +155,9 @@ References:
 
 ## Current implementation status
 
-A pure Rust queue model now exists in `src/telegram/transfers.rs`. It provides typed add/pause/resume/global-pause/remove intents, preserves insertion order, restores message-attachment entries from TDLib's initial list result without inventing an unknown priority, and applies authoritative file/list updates. Removal requests explicitly preserve the TDLib cache.
+A pure Rust queue model now exists in `src/telegram/transfers.rs`. It provides typed add/pause/resume/global-pause/remove intents, preserves insertion order, restores paged message-attachment entries from TDLib's initial list result without inventing an unknown priority, and applies authoritative file/list updates. Removal requests explicitly preserve the TDLib cache.
 
-The model is not yet wired to the account worker's TDLib JSON requests or a GTK queue view. Direct-download cancellation is a separate API path and is not represented as a message-list pause command. Do not describe this as a complete transfer queue until those integration layers and end-to-end tests are implemented.
+Queue intents are serialized and dispatched through `BackendWorker`; initial-list response decoding, correlated page-request construction and page-to-model restoration are also implemented as tested primitives. The application does not yet invoke the initial query during account startup, consume every page, reconcile the complete hydration lifecycle with live updates, or expose a GTK queue view. Direct-download cancellation is a separate API path and is not represented as a message-list pause command. Do not describe this as a complete transfer queue until those integration layers and end-to-end tests are implemented.
 
 ## Verification plan
 
