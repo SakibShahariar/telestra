@@ -521,7 +521,10 @@ impl TransferQueue {
                 complete_date,
                 is_paused,
             } => {
-                let pending_updates = self.pending_live_updates.remove(&file_id).unwrap_or_default();
+                let pending_updates = self
+                    .pending_live_updates
+                    .remove(&file_id)
+                    .unwrap_or_default();
                 if self.items.contains_key(&file_id) {
                     self.apply_download_list_update(file_id, complete_date, is_paused)
                 } else if self
@@ -1122,9 +1125,7 @@ mod tests {
 
         let mut queue = TransferQueue::new();
         queue.begin_hydration();
-        assert!(!queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads {
-            file_id: 47,
-        }));
+        assert!(!queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads { file_id: 47 }));
         assert!(queue.apply_tdlib_update(TransferUpdate::AddedToDownloads {
             file_id: 47,
             chat_id: -100,
