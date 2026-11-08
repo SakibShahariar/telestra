@@ -188,7 +188,7 @@ impl TransferListPage {
     pub fn search_request_json(request_id: RequestId, offset: &str) -> String {
         let escaped_offset = escape_json_string(offset);
         format!(
-            r#"{"@type":"searchFileDownloads","query":"","only_active":false,"only_completed":false,"offset":"{escaped_offset}","limit":{},"@extra":"{}"}"#,
+            r#"{{"@type":"searchFileDownloads","query":"","only_active":false,"only_completed":false,"offset":"{escaped_offset}","limit":{},"@extra":"{}"}}"#,
             Self::PAGE_SIZE,
             request_id.to_extra()
         )
