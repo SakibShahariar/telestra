@@ -7,7 +7,7 @@
 
 use super::{
     AuthorizationState, BackendEvent, ClientLifecycle, ClientState, DecodedMessage, EventRouter,
-    JsonTransport, RequestId, TransferCommand, TransportError, decode_message,
+    JsonTransport, RequestId, TransferCommand, TransferListPage, TransportError, decode_message,
 };
 use std::sync::Mutex;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -117,6 +117,23 @@ impl BackendWorker {
             request_id,
             command.operation_name(),
             command.to_tdlib_json(request_id),
+        )
+    }
+
+    /// Requests one page of TDLib's persistent message-attachment download list.
+    ///
+    /// The returned cursor is opaque and must be passed unchanged to the next
+    /// page request. Callers own pagination and must reconcile live updates
+    /// received while the initial list is being hydrated.
+    pub fn search_transfer_list_page(
+        &self,
+        request_id: RequestId,
+        offset: &str,
+    ) -> Result<(), mpsc::SendError<()>> {
+        self.send_request(
+            request_id,
+            "searchFileDownloads",
+            TransferListPage::search_request_json(request_id, offset),
         )
     }
 
@@ -433,6 +450,42 @@ mod tests {
                 .unwrap(),
             WorkerEvent::Stopped(ClientLifecycle::Closed)
         );
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn worker_sends_correlated_transfer_list_page_requests() {
+        let request_id = RequestId::new(80);
+        let response = format!(r#"{{"@type":"foundFileDownloads","total_counts":{{"active_count":0,"paused_count":0,"completed_count":0}},"files":[],"next_offset":"","@extra":"{}"}}"#, request_id.to_extra());
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let transport = FakeTransport {
+            incoming: VecDeque::from([response]),
+            sent: Arc::clone(&sent),
+        };
+        let worker = BackendWorker::spawn(transport).unwrap();
+        let offset = r#"opaque "cursor"\\page"#;
+
+        worker
+            .search_transfer_list_page(request_id, offset)
+            .unwrap();
+
+        assert!(matches!(
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            WorkerEvent::Backend {
+                completed_operation: Some((id, operation)),
+                event: crate::telegram::BackendEvent::Response { .. },
+            } if id == request_id && operation == "searchFileDownloads"
+        ));
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![TransferListPage::search_request_json(request_id, offset)]
+        );
+
+        worker.shutdown().unwrap();
+        worker.events().recv_timeout(Duration::from_secs(2)).unwrap();
         worker.join().unwrap();
     }
 
