@@ -278,6 +278,9 @@ impl Error for TransferQueueError {}
 pub struct TransferQueue {
     items: BTreeMap<i32, TransferItem>,
     insertion_order: Vec<i32>,
+    /// Incremental updates for IDs not yet present in a paginated snapshot.
+    /// A removal here is a tombstone that prevents a stale page restoring it.
+    pending_live_updates: BTreeMap<i32, Vec<TransferUpdate>>,
 }
 
 impl TransferQueue {
@@ -387,6 +390,18 @@ impl TransferQueue {
                 continue;
             }
 
+            let pending_updates = self
+                .pending_live_updates
+                .remove(&entry.file_id)
+                .unwrap_or_default();
+            if pending_updates
+                .iter()
+                .any(|update| matches!(update, TransferUpdate::RemovedFromDownloads { .. }))
+            {
+                // The page is a stale snapshot of an item removed afterwards.
+                continue;
+            }
+
             self.restore_message_attachment(
                 entry.file_id,
                 entry.chat_id,
@@ -395,6 +410,11 @@ impl TransferQueue {
                 entry.is_paused,
             )?;
             restored += 1;
+
+            // Replay incremental state in arrival order over the older snapshot.
+            for update in pending_updates {
+                self.apply_tdlib_update(update);
+            }
         }
         Ok(restored)
     }
@@ -481,12 +501,42 @@ impl TransferQueue {
                 file_id,
                 complete_date,
                 is_paused,
-            } => self.apply_download_list_update(file_id, complete_date, is_paused),
+            } => {
+                if self.items.contains_key(&file_id) {
+                    self.apply_download_list_update(file_id, complete_date, is_paused)
+                } else {
+                    self.pending_live_updates
+                        .entry(file_id)
+                        .or_default()
+                        .push(TransferUpdate::DownloadListChanged {
+                            file_id,
+                            complete_date,
+                            is_paused,
+                        });
+                    false
+                }
+            }
             TransferUpdate::FileStateChanged { file_id, state } => {
-                self.apply_file_state(file_id, state)
+                if self.items.contains_key(&file_id) {
+                    self.apply_file_state(file_id, state)
+                } else {
+                    self.pending_live_updates
+                        .entry(file_id)
+                        .or_default()
+                        .push(TransferUpdate::FileStateChanged { file_id, state });
+                    false
+                }
             }
             TransferUpdate::RemovedFromDownloads { file_id } => {
-                self.apply_removed(file_id).is_some()
+                if self.items.contains_key(&file_id) {
+                    self.apply_removed(file_id).is_some()
+                } else {
+                    self.pending_live_updates
+                        .entry(file_id)
+                        .or_default()
+                        .push(TransferUpdate::RemovedFromDownloads { file_id });
+                    false
+                }
             }
         }
     }
@@ -871,6 +921,71 @@ mod tests {
         assert_eq!(queue.get(42).unwrap().status(), &TransferStatus::Paused);
         assert_eq!(queue.get(43).unwrap().status(), &TransferStatus::Completed);
         assert!(page.has_more());
+    }
+
+    #[test]
+    fn restores_snapshot_then_replays_live_updates_received_before_the_page() {
+        use super::{DownloadListEntry, TransferListPage, TransferUpdate};
+
+        let mut queue = TransferQueue::new();
+        assert!(!queue.apply_tdlib_update(TransferUpdate::DownloadListChanged {
+            file_id: 44,
+            complete_date: 0,
+            is_paused: true,
+        }));
+        assert!(!queue.apply_tdlib_update(TransferUpdate::FileStateChanged {
+            file_id: 44,
+            state: FileTransferState {
+                is_downloading_active: true,
+                downloaded_size: 768,
+                expected_size: 2048,
+                ..FileTransferState::default()
+            },
+        }));
+
+        let snapshot = TransferListPage {
+            files: vec![DownloadListEntry {
+                file_id: 44,
+                chat_id: -100,
+                message_id: 22,
+                add_date: 10,
+                complete_date: 0,
+                is_paused: false,
+            }],
+            ..TransferListPage::default()
+        };
+
+        assert_eq!(queue.restore_page(&snapshot), Ok(1));
+        let item = queue.get(44).unwrap();
+        assert_eq!(item.status(), &TransferStatus::Downloading);
+        assert_eq!(item.priority(), None);
+        assert_eq!(item.progress().downloaded_size, 768);
+        assert_eq!(item.progress().expected_size, 2048);
+    }
+
+    #[test]
+    fn removal_received_before_a_page_prevents_stale_snapshot_restoration() {
+        use super::{DownloadListEntry, TransferListPage, TransferUpdate};
+
+        let mut queue = TransferQueue::new();
+        assert!(!queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads {
+            file_id: 45,
+        }));
+        let stale_snapshot = TransferListPage {
+            files: vec![DownloadListEntry {
+                file_id: 45,
+                chat_id: -100,
+                message_id: 23,
+                add_date: 10,
+                complete_date: 0,
+                is_paused: false,
+            }],
+            ..TransferListPage::default()
+        };
+
+        assert_eq!(queue.restore_page(&stale_snapshot), Ok(0));
+        assert!(queue.get(45).is_none());
+        assert!(queue.is_empty());
     }
 
     #[test]
