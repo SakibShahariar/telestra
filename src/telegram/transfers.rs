@@ -5,7 +5,7 @@
 //! JSON requests and apply authoritative `updateFile`/`updateFileDownload`
 //! events back into this model.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 
@@ -682,6 +682,136 @@ impl TransferQueue {
     }
 }
 
+/// Progress returned while consuming the initial paginated download list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TransferHydrationProgress {
+    More {
+        restored: usize,
+        next_offset: String,
+    },
+    Complete {
+        restored: usize,
+    },
+}
+
+/// Failure while coordinating the initial download-list snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TransferHydrationError {
+    AlreadyActive,
+    NotActive,
+    RepeatedCursor(String),
+    Queue(TransferQueueError),
+}
+
+impl fmt::Display for TransferHydrationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AlreadyActive => formatter.write_str("download-list hydration is already active"),
+            Self::NotActive => formatter.write_str("download-list hydration has not started"),
+            Self::RepeatedCursor(cursor) => {
+                write!(formatter, "TDLib repeated a download-list cursor: {cursor:?}")
+            }
+            Self::Queue(error) => write!(formatter, "could not restore download-list page: {error}"),
+        }
+    }
+}
+
+impl Error for TransferHydrationError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Queue(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl From<TransferQueueError> for TransferHydrationError {
+    fn from(error: TransferQueueError) -> Self {
+        Self::Queue(error)
+    }
+}
+
+/// Coordinates the model side of TDLib's initial paginated list hydration.
+///
+/// The caller sends the initial request with the empty offset, passes each
+/// decoded response here, and dispatches the returned cursor until Complete.
+#[derive(Debug, Default)]
+pub struct TransferListHydrator {
+    active: bool,
+    requested_offsets: BTreeSet<String>,
+}
+
+impl TransferListHydrator {
+    /// Starts a new hydration window and returns the initial empty cursor.
+    pub fn begin(
+        &mut self,
+        queue: &mut TransferQueue,
+    ) -> Result<String, TransferHydrationError> {
+        if self.active {
+            return Err(TransferHydrationError::AlreadyActive);
+        }
+        self.requested_offsets.clear();
+        self.requested_offsets.insert(String::new());
+        self.active = true;
+        queue.begin_hydration();
+        Ok(String::new())
+    }
+
+    /// Applies one decoded page and returns the next opaque cursor, if any.
+    ///
+    /// Repeated cursors are rejected to prevent an accidental infinite page
+    /// loop. A malformed page or repeated cursor aborts the hydration window.
+    pub fn accept_page(
+        &mut self,
+        queue: &mut TransferQueue,
+        page: &TransferListPage,
+    ) -> Result<TransferHydrationProgress, TransferHydrationError> {
+        if !self.active {
+            return Err(TransferHydrationError::NotActive);
+        }
+
+        let restored = match queue.restore_page(page) {
+            Ok(restored) => restored,
+            Err(error) => {
+                self.abort(queue);
+                return Err(TransferHydrationError::Queue(error));
+            }
+        };
+
+        if page.next_offset.is_empty() {
+            self.finish(queue);
+            return Ok(TransferHydrationProgress::Complete { restored });
+        }
+
+        if !self.requested_offsets.insert(page.next_offset.clone()) {
+            let cursor = page.next_offset.clone();
+            self.abort(queue);
+            return Err(TransferHydrationError::RepeatedCursor(cursor));
+        }
+
+        Ok(TransferHydrationProgress::More {
+            restored,
+            next_offset: page.next_offset.clone(),
+        })
+    }
+
+    /// Aborts hydration after a request, decode or transport failure.
+    pub fn abort(&mut self, queue: &mut TransferQueue) {
+        self.finish(queue);
+    }
+
+    /// Returns whether the initial list is still being paginated.
+    pub const fn is_active(&self) -> bool {
+        self.active
+    }
+
+    fn finish(&mut self, queue: &mut TransferQueue) {
+        self.active = false;
+        self.requested_offsets.clear();
+        queue.finish_hydration();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1073,6 +1203,106 @@ mod tests {
         assert_eq!(queue.restore_page(&first_page), Ok(0));
         assert!(queue.get(48).is_none());
         queue.finish_hydration();
+    }
+
+    #[test]
+    fn hydrator_consumes_all_pages_and_finishes_the_queue_window() {
+        use super::{
+            DownloadListEntry, TransferHydrationProgress, TransferListHydrator, TransferListPage,
+        };
+
+        let mut queue = TransferQueue::new();
+        let mut hydrator = TransferListHydrator::default();
+        assert_eq!(hydrator.begin(&mut queue), Ok(String::new()));
+        assert!(queue.hydration_in_progress);
+
+        let first_page = TransferListPage {
+            files: vec![DownloadListEntry {
+                file_id: 61,
+                chat_id: 1,
+                message_id: 2,
+                add_date: 0,
+                complete_date: 0,
+                is_paused: false,
+            }],
+            next_offset: "opaque-next-page".to_owned(),
+            ..TransferListPage::default()
+        };
+        assert_eq!(
+            hydrator.accept_page(&mut queue, &first_page),
+            Ok(TransferHydrationProgress::More {
+                restored: 1,
+                next_offset: "opaque-next-page".to_owned(),
+            })
+        );
+        assert!(hydrator.is_active());
+
+        let last_page = TransferListPage {
+            files: vec![DownloadListEntry {
+                file_id: 62,
+                chat_id: 1,
+                message_id: 3,
+                add_date: 0,
+                complete_date: 0,
+                is_paused: false,
+            }],
+            ..TransferListPage::default()
+        };
+        assert_eq!(
+            hydrator.accept_page(&mut queue, &last_page),
+            Ok(TransferHydrationProgress::Complete { restored: 1 })
+        );
+        assert!(!hydrator.is_active());
+        assert!(!queue.hydration_in_progress);
+        assert_eq!(queue.len(), 2);
+    }
+
+    #[test]
+    fn hydrator_rejects_repeated_cursors_and_aborts_cleanly() {
+        use super::{
+            DownloadListEntry, TransferHydrationError, TransferListHydrator, TransferListPage,
+        };
+
+        let mut queue = TransferQueue::new();
+        let mut hydrator = TransferListHydrator::default();
+        hydrator.begin(&mut queue).unwrap();
+        let page = TransferListPage {
+            files: vec![DownloadListEntry {
+                file_id: 63,
+                chat_id: 1,
+                message_id: 4,
+                add_date: 0,
+                complete_date: 0,
+                is_paused: false,
+            }],
+            next_offset: "same-cursor".to_owned(),
+            ..TransferListPage::default()
+        };
+        hydrator.accept_page(&mut queue, &page).unwrap();
+
+        assert_eq!(
+            hydrator.accept_page(&mut queue, &page),
+            Err(TransferHydrationError::RepeatedCursor(
+                "same-cursor".to_owned()
+            ))
+        );
+        assert!(!hydrator.is_active());
+        assert!(!queue.hydration_in_progress);
+    }
+
+    #[test]
+    fn hydrator_rejects_pages_before_beginning() {
+        use super::{
+            TransferHydrationError, TransferListHydrator, TransferListPage,
+        };
+
+        let mut queue = TransferQueue::new();
+        let mut hydrator = TransferListHydrator::default();
+        assert_eq!(
+            hydrator.accept_page(&mut queue, &TransferListPage::default()),
+            Err(TransferHydrationError::NotActive)
+        );
+        assert!(queue.is_empty());
     }
 
     #[test]
