@@ -85,6 +85,24 @@ References:
 - [downloadFile](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1download_file.html)
 - [TDLib maintainer clarification on concurrent ranges](https://github.com/tdlib/td/issues/3017)
 
+## Priority and reordering limits (issue #18)
+
+TDLib exposes a priority when starting a direct `downloadFile` request and when adding a message attachment with `addFileToDownloads`. The supported priority range is 1–32; higher values are scheduled earlier. For equal priorities, TDLib schedules the most recently requested item first.
+
+The public API documents priority as an input to those start/add calls; it does not expose a dedicated operation for changing the priority of an already queued item. Therefore:
+
+- Telestra can maintain an app-owned ordering for items that have not yet been submitted to TDLib, then submit them in that order.
+- Map app-level priority bands to TDLib's 1–32 range when starting work.
+- Do not promise an arbitrary drag-and-drop order for items already managed by TDLib's persistent download list.
+- Do not remove and re-add active transfers merely to reorder them unless a later implementation proves that this preserves their progress and persistence.
+- Equal-priority tie-breaking is TDLib-defined (last request first); the app must not claim FIFO ordering for ties.
+
+This supports bounded priority scheduling, but not arbitrary live reordering of every active TDLib-managed download without additional app-side orchestration.
+
+References:
+- [downloadFile priority](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1download_file.html)
+- [addFileToDownloads priority](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1add_file_to_downloads.html)
+
 ## Verification plan
 
 - Unit-test queue state transitions with fake TDLib events: queued, active, paused, resumed, completed, canceled, and removed.
