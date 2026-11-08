@@ -18,7 +18,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check TDLib packaging script syntax
-        run: bash -n scripts/verify-tdlib-source.sh
+        run: |
+          bash -n scripts/verify-tdlib-source.sh
+          bash -n scripts/build-tdlib.sh
 
       - name: Install native development dependencies
         run: |
