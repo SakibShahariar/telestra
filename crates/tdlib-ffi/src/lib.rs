@@ -211,10 +211,9 @@ mod dynamic {
         }
     }
 
-    pub(super) use TdJsonLibrary as Library;
 }
 
-pub use dynamic::Library as TdJsonLibrary;
+pub use dynamic::TdJsonLibrary;
 
 /// Errors returned by the TDLib dynamic loader and C ABI boundary.
 #[derive(Debug)]
