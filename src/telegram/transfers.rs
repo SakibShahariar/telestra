@@ -470,6 +470,41 @@ mod tests {
     }
 
     #[test]
+    fn applies_decoded_tdlib_updates_to_existing_queue_items() {
+        use super::TransferUpdate;
+
+        let mut queue = queue_with_one_item();
+        assert!(queue.apply_tdlib_update(TransferUpdate::DownloadListChanged {
+            file_id: 42,
+            complete_date: 0,
+            is_paused: true,
+        }));
+        assert_eq!(queue.get(42).unwrap().status(), &TransferStatus::Paused);
+
+        assert!(queue.apply_tdlib_update(TransferUpdate::FileStateChanged {
+            file_id: 42,
+            state: FileTransferState {
+                is_downloading_active: true,
+                is_downloading_completed: false,
+                download_offset: 0,
+                downloaded_prefix_size: 2048,
+                downloaded_size: 2048,
+                expected_size: 8192,
+            },
+        }));
+        assert_eq!(queue.get(42).unwrap().status(), &TransferStatus::Downloading);
+        assert_eq!(queue.get(42).unwrap().progress().downloaded_prefix_size, 2048);
+
+        assert!(queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads {
+            file_id: 42,
+        }));
+        assert!(queue.is_empty());
+        assert!(!queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads {
+            file_id: 42,
+        }));
+    }
+
+    #[test]
     fn enqueues_message_attachments_with_tdlib_priority() {
         let mut queue = TransferQueue::new();
         let command = queue.enqueue_message_attachment(42, -100, 7, 16).unwrap();

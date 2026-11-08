@@ -567,4 +567,65 @@ mod tests {
             })
         );
     }
+    #[test]
+    fn decodes_download_list_file_and_removal_updates() {
+        use super::decode_transfer_update;
+        use crate::telegram::{FileTransferState, TransferUpdate};
+
+        assert_eq!(
+            decode_transfer_update(
+                r#"{"@type":"updateFileDownload","file_id":42,"complete_date":0,"is_paused":true,"counts":{}}"#
+            ),
+            Ok(Some(TransferUpdate::DownloadListChanged {
+                file_id: 42,
+                complete_date: 0,
+                is_paused: true,
+            }))
+        );
+        assert_eq!(
+            decode_transfer_update(
+                r#"{"@type":"updateFile","file":{"id":42,"size":0,"expected_size":16384,"local":{"is_downloading_active":true,"is_downloading_completed":false,"download_offset":1024,"downloaded_prefix_size":4096,"downloaded_size":5120}}}"#
+            ),
+            Ok(Some(TransferUpdate::FileStateChanged {
+                file_id: 42,
+                state: FileTransferState {
+                    is_downloading_active: true,
+                    is_downloading_completed: false,
+                    download_offset: 1024,
+                    downloaded_prefix_size: 4096,
+                    downloaded_size: 5120,
+                    expected_size: 16384,
+                },
+            }))
+        );
+        assert_eq!(
+            decode_transfer_update(
+                r#"{"@type":"updateFileRemovedFromDownloads","file_id":42,"counts":{}}"#
+            ),
+            Ok(Some(TransferUpdate::RemovedFromDownloads { file_id: 42 }))
+        );
+        assert_eq!(
+            decode_transfer_update(r#"{"@type":"updateNewChat","chat":{"id":1}}"#),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_transfer_update_fields() {
+        use super::decode_transfer_update;
+
+        assert!(decode_transfer_update(
+            r#"{"@type":"updateFileDownload","file_id":42,"complete_date":0,"is_paused":"yes"}"#
+        )
+        .is_err());
+        assert!(decode_transfer_update(
+            r#"{"@type":"updateFile","file":{"id":42,"expected_size":-1,"local":{}}}"#
+        )
+        .is_err());
+        assert!(decode_transfer_update(
+            r#"{"@type":"updateFileRemovedFromDownloads","file_id":2147483648}"#
+        )
+        .is_err());
+    }
+
 }
