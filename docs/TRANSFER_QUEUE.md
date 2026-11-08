@@ -57,6 +57,34 @@ References:
 - [TDLib autoDownloadSettings](https://core.telegram.org/constructor/autoDownloadSettings)
 - [TDLib options and configuration](https://core.telegram.org/tdlib/options)
 
+## Interrupted transfers and recovery (issue #17)
+
+TDLib exposes enough local-file state to distinguish a real contiguous downloaded prefix from approximate transfer progress:
+
+- `localFile.is_downloading_active` indicates whether the download is still active.
+- `localFile.is_downloading_completed` indicates whether the local copy is complete.
+- `localFile.download_offset` is the offset from which the downloaded prefix is measured.
+- `localFile.downloaded_prefix_size` is the contiguous prefix available from that offset when the file is incomplete.
+- `localFile.downloaded_size` is only suitable for approximate progress. TDLib explicitly warns that the actual file may be larger and some downloaded parts may contain garbage; never use this field alone as a resume offset.
+- `getFileDownloadedPrefixSize(file_id, offset)` can query the downloaded prefix from a chosen offset.
+- `downloadFile(file_id, priority, offset, limit, synchronous=false)` accepts a starting offset and range limit; progress/completion arrives through `updateFile`.
+
+Recovery policy:
+
+1. Prefer TDLib's own persisted file state and normal download lifecycle; do not manually splice or rename partial files.
+2. On restart or reconnect, fetch the current `File` state and wait until `is_downloading_active=false` before deciding whether the last attempt stopped or completed.
+3. If incomplete, use the TDLib-reported `download_offset` and contiguous `downloaded_prefix_size` (or `getFileDownloadedPrefixSize`) to reason about the verified prefix. Never resume from approximate `downloaded_size`.
+4. Retry using TDLib's file ID and its documented download API; classify permanent errors separately from transient/network failures and apply bounded backoff.
+5. Never run concurrent range requests for the same file. TDLib maintainers explicitly state that only one concurrent download request per file is supported.
+
+This establishes that TDLib exposes recovery state and offset-based downloads, but it does not justify promising that every interrupted transfer can always resume from an arbitrary byte. The implementation must test actual file states and let TDLib validate whether the requested prefix is usable.
+
+References:
+- [localFile state](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1local_file.html)
+- [getFileDownloadedPrefixSize](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_file_downloaded_prefix_size.html)
+- [downloadFile](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1download_file.html)
+- [TDLib maintainer clarification on concurrent ranges](https://github.com/tdlib/td/issues/3017)
+
 ## Verification plan
 
 - Unit-test queue state transitions with fake TDLib events: queued, active, paused, resumed, completed, canceled, and removed.
