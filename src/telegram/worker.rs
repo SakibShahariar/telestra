@@ -462,7 +462,10 @@ mod tests {
             vec![command.to_tdlib_json(request_id)]
         );
         assert!(matches!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::Backend {
                 completed_operation: Some((id, operation)),
                 ..
@@ -480,7 +483,10 @@ mod tests {
             }
         ));
         assert_eq!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::Stopped(ClientLifecycle::Closed)
         );
         worker.join().unwrap();
