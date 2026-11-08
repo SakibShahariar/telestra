@@ -428,7 +428,6 @@ mod tests {
         queue
     }
 
-
     #[test]
     fn transfer_commands_serialize_as_correlated_tdlib_requests() {
         use super::TransferCommand;
