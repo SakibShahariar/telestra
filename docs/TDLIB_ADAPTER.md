@@ -1,6 +1,6 @@
 # TDLib adapter implementation contract
 
-**Status:** The transport-independent protocol, JSON envelope decoder, event routing, lifecycle primitives, background worker, isolated TDLib C ABI loader and native mailbox adapters are implemented and covered by tests. The application does not yet load the runtime at startup; native source-build verification is in progress, and Telegram authentication/connectivity is not available.
+**Status:** The transport-independent protocol, JSON envelope decoder, event routing, lifecycle primitives, background worker, isolated TDLib C ABI loader and native mailbox adapters are implemented and covered by tests. The pinned x86_64 TDLib 1.8.69 source build, exported-symbol/runtime-dependency checks and native Rust FFI smoke test all pass in GitHub Actions. The application does not yet load the runtime at startup; aarch64/Flatpak packaging and Telegram authentication/connectivity remain outstanding.
 
 ## Ownership
 
@@ -50,7 +50,7 @@ The transport, lifecycle, request correlation, decoder and event types are delib
 - Receive-loop failure and clean shutdown both draining pending operations.
 - One receive owner per client and no GTK access from the worker.
 
-The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, lifecycle transitions, worker response correlation, rejected request envelopes, malformed-message protocol failures, send/receive failures and close confirmation. The native FFI loader and native sender/receive adapters are implemented. The pinned source-build workflow is in place but its first clean build is still being verified. Application startup/account-flow wiring, Flatpak/multi-architecture packaging and end-to-end Telegram connectivity remain outstanding. Worker events can now be polled on the GLib main context through a tested, non-blocking bridge.
+The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, lifecycle transitions, worker response correlation, rejected request envelopes, malformed-message protocol failures, send/receive failures and close confirmation. The native FFI loader and native sender/receive adapters are implemented. The pinned x86_64 source build and synchronous native FFI smoke test pass in the dedicated workflow. Application startup/account-flow wiring, aarch64/Flatpak packaging and end-to-end Telegram connectivity remain outstanding. Worker events can now be polled on the GLib main context through a tested, non-blocking bridge.
 
 
 ## Reproducible native build
