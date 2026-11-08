@@ -190,7 +190,9 @@ pub fn decode_transfer_update(json: &str) -> Result<Option<TransferUpdate>, Deco
             let is_paused = object
                 .get("is_paused")
                 .and_then(Value::as_bool)
-                .ok_or_else(|| parser.error("TDLib transfer update is missing boolean is_paused"))?;
+                .ok_or_else(|| {
+                    parser.error("TDLib transfer update is missing boolean is_paused")
+                })?;
             Ok(Some(TransferUpdate::DownloadListChanged {
                 file_id,
                 complete_date,
@@ -222,10 +224,9 @@ pub fn decode_transfer_update(json: &str) -> Result<Option<TransferUpdate>, Deco
                 .and_then(Value::as_object)
                 .ok_or_else(|| parser.error("updateFile is missing object file.local"))?;
             let required_local_bool = |field: &'static str| {
-                local
-                    .get(field)
-                    .and_then(Value::as_bool)
-                    .ok_or_else(|| parser.error("updateFile local state is missing a boolean field"))
+                local.get(field).and_then(Value::as_bool).ok_or_else(|| {
+                    parser.error("updateFile local state is missing a boolean field")
+                })
             };
             let required_local_size = |field: &'static str| {
                 local
