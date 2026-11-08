@@ -119,7 +119,10 @@ impl fmt::Display for TransferQueueError {
         match self {
             Self::InvalidFileId(file_id) => write!(formatter, "invalid TDLib file ID: {file_id}"),
             Self::InvalidPriority(priority) => {
-                write!(formatter, "TDLib download priority must be 1–32, got {priority}")
+                write!(
+                    formatter,
+                    "TDLib download priority must be 1–32, got {priority}"
+                )
             }
             Self::DuplicateFileId(file_id) => {
                 write!(formatter, "file {file_id} is already in the transfer queue")
@@ -253,9 +256,7 @@ impl TransferQueue {
             TransferStatus::Queued | TransferStatus::Downloading if !is_paused => {
                 return Ok(None);
             }
-            TransferStatus::Queued
-            | TransferStatus::Downloading
-            | TransferStatus::Paused => {}
+            TransferStatus::Queued | TransferStatus::Downloading | TransferStatus::Paused => {}
         }
 
         Ok(Some(TransferCommand::TogglePaused { file_id, is_paused }))
@@ -276,10 +277,7 @@ impl TransferQueue {
     ///
     /// The item is removed from this model only after TDLib sends the matching
     /// `updateFileRemovedFromDownloads` event.
-    pub fn request_remove(
-        &self,
-        file_id: i32,
-    ) -> Result<TransferCommand, TransferQueueError> {
+    pub fn request_remove(&self, file_id: i32) -> Result<TransferCommand, TransferQueueError> {
         if !self.items.contains_key(&file_id) {
             return Err(TransferQueueError::UnknownFileId(file_id));
         }
@@ -348,7 +346,8 @@ impl TransferQueue {
     /// Applies TDLib's updateFileRemovedFromDownloads event.
     pub fn apply_removed(&mut self, file_id: i32) -> Option<TransferItem> {
         let item = self.items.remove(&file_id)?;
-        self.insertion_order.retain(|queued_id| *queued_id != file_id);
+        self.insertion_order
+            .retain(|queued_id| *queued_id != file_id);
         Some(item)
     }
 
@@ -381,18 +380,14 @@ mod tests {
 
     fn queue_with_one_item() -> TransferQueue {
         let mut queue = TransferQueue::new();
-        queue
-            .enqueue_message_attachment(42, -100, 7, 16)
-            .unwrap();
+        queue.enqueue_message_attachment(42, -100, 7, 16).unwrap();
         queue
     }
 
     #[test]
     fn enqueues_message_attachments_with_tdlib_priority() {
         let mut queue = TransferQueue::new();
-        let command = queue
-            .enqueue_message_attachment(42, -100, 7, 16)
-            .unwrap();
+        let command = queue.enqueue_message_attachment(42, -100, 7, 16).unwrap();
 
         assert_eq!(
             command,
@@ -570,5 +565,4 @@ mod tests {
             vec![9, 3, 7]
         );
     }
-
 }

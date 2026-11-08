@@ -12,8 +12,8 @@ mod dispatcher;
 mod events;
 mod lifecycle;
 mod protocol;
-mod transport;
 mod transfers;
+mod transport;
 mod worker;
 
 pub use tdlib_ffi::{TdJsonError, TdJsonLibrary};
@@ -26,11 +26,11 @@ pub use dispatcher::{
 pub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEvent, TdlibError};
 pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
-pub use transport::{JsonTransport, TransportError, TransportOperation};
 pub use transfers::{
     FileTransferState, TransferCommand, TransferItem, TransferProgress, TransferQueue,
     TransferQueueError, TransferStatus,
 };
+pub use transport::{JsonTransport, TransportError, TransportOperation};
 pub use worker::{BackendWorker, WorkerEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
