@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use super::transfers::{FileTransferState, TransferUpdate};
+use super::transfers::{\n    DownloadListEntry, DownloadedFileCounts, FileTransferState, TransferListPage, TransferUpdate,\n};
 use super::{AuthorizationState, TdlibError};
 
 /// A decoded TDLib message envelope.
@@ -151,6 +151,104 @@ pub fn decode_envelope(json: &str) -> Result<DecodedEnvelope, DecodeError> {
 /// Decodes one complete TDLib JSON object without discarding unknown fields.
 pub fn decode_message(json: &str) -> Result<DecodedMessage, DecodeError> {
     decode_envelope(json).map(|envelope| envelope.message)
+}
+
+/// Decodes one foundFileDownloads response, including all entries and its cursor.
+pub fn decode_transfer_list_page(json: &str) -> Result<TransferListPage, DecodeError> {
+    let mut parser = Parser {
+        input: json.as_bytes(),
+        offset: 0,
+    };
+    let value = parser.parse_value(0)?;
+    parser.skip_whitespace();
+    if parser.offset != parser.input.len() {
+        return Err(parser.error("trailing data after JSON value"));
+    }
+    let object = match value {
+        Value::Object(object) => object,
+        _ => return Err(parser.error("TDLib download-list response must be an object")),
+    };
+    if object.get("@type").and_then(Value::as_str) != Some("foundFileDownloads") {
+        return Err(parser.error("TDLib response is not foundFileDownloads"));
+    }
+
+    let counts = object
+        .get("total_counts")
+        .and_then(Value::as_object)
+        .ok_or_else(|| parser.error("foundFileDownloads is missing total_counts"))?;
+    let count = |field: &'static str| {
+        counts
+            .get(field)
+            .and_then(Value::as_i64)
+            .and_then(|value| i32::try_from(value).ok())
+            .ok_or_else(|| parser.error("download counts contain a missing or invalid field"))
+    };
+    let total_counts = DownloadedFileCounts {
+        active_count: count("active_count")?,
+        paused_count: count("paused_count")?,
+        completed_count: count("completed_count")?,
+    };
+
+    let files = object
+        .get("files")
+        .and_then(Value::as_array)
+        .ok_or_else(|| parser.error("foundFileDownloads is missing files array"))?;
+    let mut entries = Vec::with_capacity(files.len());
+    for file in files {
+        let file = file
+            .as_object()
+            .ok_or_else(|| parser.error("fileDownload entry must be an object"))?;
+        let file_id = file
+            .get("file_id")
+            .and_then(Value::as_i64)
+            .and_then(|value| i32::try_from(value).ok())
+            .ok_or_else(|| parser.error("fileDownload has an invalid file_id"))?;
+        let add_date = file
+            .get("add_date")
+            .and_then(Value::as_i64)
+            .and_then(|value| i32::try_from(value).ok())
+            .ok_or_else(|| parser.error("fileDownload has an invalid add_date"))?;
+        let complete_date = file
+            .get("complete_date")
+            .and_then(Value::as_i64)
+            .and_then(|value| i32::try_from(value).ok())
+            .ok_or_else(|| parser.error("fileDownload has an invalid complete_date"))?;
+        let is_paused = file
+            .get("is_paused")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| parser.error("fileDownload is missing boolean is_paused"))?;
+        let message = file
+            .get("message")
+            .and_then(Value::as_object)
+            .ok_or_else(|| parser.error("fileDownload is missing message object"))?;
+        let chat_id = message
+            .get("chat_id")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| parser.error("fileDownload message has an invalid chat_id"))?;
+        let message_id = message
+            .get("id")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| parser.error("fileDownload message has an invalid id"))?;
+        entries.push(DownloadListEntry {
+            file_id,
+            chat_id,
+            message_id,
+            add_date,
+            complete_date,
+            is_paused,
+        });
+    }
+    let next_offset = object
+        .get("next_offset")
+        .and_then(Value::as_str)
+        .ok_or_else(|| parser.error("foundFileDownloads is missing string next_offset"))?
+        .to_owned();
+
+    Ok(TransferListPage {
+        total_counts,
+        files: entries,
+        next_offset,
+    })
 }
 
 /// Decodes the TDLib file-transfer updates consumed by the download queue.
@@ -338,6 +436,14 @@ impl Value {
     fn as_bool(&self) -> Option<bool> {
         if let Self::Bool(value) = self {
             Some(*value)
+        } else {
+            None
+        }
+    }
+
+    fn as_array(&self) -> Option<&[Value]> {
+        if let Self::Array(value) = self {
+            Some(value)
         } else {
             None
         }
@@ -556,19 +662,20 @@ impl Parser<'_> {
 
     fn parse_array(&mut self, depth: usize) -> Result<Value, DecodeError> {
         self.consume(b'[')?;
+        let mut values = Vec::new();
         self.skip_whitespace();
         if self.input.get(self.offset) == Some(&b']') {
             self.offset += 1;
-            return Ok(Value::Array);
+            return Ok(Value::Array(values));
         }
         loop {
-            self.parse_value(depth)?;
+            values.push(self.parse_value(depth)?);
             self.skip_whitespace();
             match self.input.get(self.offset) {
                 Some(b',') => self.offset += 1,
                 Some(b']') => {
                     self.offset += 1;
-                    return Ok(Value::Array);
+                    return Ok(Value::Array(values));
                 }
                 _ => return Err(self.error("expected comma or closing array bracket")),
             }
@@ -716,6 +823,58 @@ mod tests {
             })
         );
     }
+    #[test]
+    fn decodes_initial_download_list_page_and_pagination_cursor() {
+        use super::decode_transfer_list_page;
+        use crate::telegram::{
+            DownloadListEntry, DownloadedFileCounts, TransferListPage,
+        };
+
+        let json = r#"{"@type":"foundFileDownloads","total_counts":{"active_count":2,"paused_count":1,"completed_count":4},"files":[{"file_id":42,"message":{"id":9,"chat_id":-100},"add_date":10,"complete_date":0,"is_paused":true},{"file_id":43,"message":{"id":10,"chat_id":-100},"add_date":11,"complete_date":12,"is_paused":false}],"next_offset":"cursor-2"}"#;
+        assert_eq!(
+            decode_transfer_list_page(json),
+            Ok(TransferListPage {
+                total_counts: DownloadedFileCounts {
+                    active_count: 2,
+                    paused_count: 1,
+                    completed_count: 4,
+                },
+                files: vec![
+                    DownloadListEntry {
+                        file_id: 42,
+                        chat_id: -100,
+                        message_id: 9,
+                        add_date: 10,
+                        complete_date: 0,
+                        is_paused: true,
+                    },
+                    DownloadListEntry {
+                        file_id: 43,
+                        chat_id: -100,
+                        message_id: 10,
+                        add_date: 11,
+                        complete_date: 12,
+                        is_paused: false,
+                    },
+                ],
+                next_offset: "cursor-2".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_incomplete_or_wrong_download_list_responses() {
+        use super::decode_transfer_list_page;
+
+        assert!(decode_transfer_list_page(r#"{"@type":"ok"}"#).is_err());
+        assert!(decode_transfer_list_page(
+            r#"{"@type":"foundFileDownloads","total_counts":{},"files":[false],"next_offset":""}"#
+        ).is_err());
+        assert!(decode_transfer_list_page(
+            r#"{"@type":"foundFileDownloads","total_counts":{"active_count":0,"paused_count":0,"completed_count":0},"files":[],"next_offset":42}"#
+        ).is_err());
+    }
+
     #[test]
     fn decodes_download_list_file_and_removal_updates() {
         use super::decode_transfer_update;
