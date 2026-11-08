@@ -8,6 +8,10 @@ on:
       - "scripts/verify-tdlib-source.sh"
       - "packaging/tdlib/**"
       - ".github/workflows/tdlib.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/tdlib-ffi/**"
+      - "tests/tdlib_native_smoke.rs"
   pull_request:
     paths:
       - "scripts/build-tdlib.sh"
@@ -35,3 +39,9 @@ jobs:
 
       - name: Build and verify TDLib
         run: scripts/build-tdlib.sh
+
+      - name: Exercise the native TDLib API through Rust FFI
+        run: |
+          library="$(find target/tdlib/lib -type f -name 'libtdjson.so*' -print -quit)"
+          test -n "$library"
+          TELESTRA_TDLIB_LIBRARY="$library" cargo test --locked --test tdlib_native_smoke
