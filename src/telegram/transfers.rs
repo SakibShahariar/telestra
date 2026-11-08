@@ -381,21 +381,20 @@ impl TransferQueue {
         let mut restored = 0;
         for entry in &page.files {
             if self.items.contains_key(&entry.file_id) {
-                self.apply_download_list_update(
-                    entry.file_id,
-                    entry.complete_date,
-                    entry.is_paused,
-                );
-            } else {
-                self.restore_message_attachment(
-                    entry.file_id,
-                    entry.chat_id,
-                    entry.message_id,
-                    entry.complete_date,
-                    entry.is_paused,
-                )?;
-                restored += 1;
+                // A live update may have arrived before this snapshot page.
+                // Keep the already-known item rather than regressing its newer
+                // status or progress with potentially stale list metadata.
+                continue;
             }
+
+            self.restore_message_attachment(
+                entry.file_id,
+                entry.chat_id,
+                entry.message_id,
+                entry.complete_date,
+                entry.is_paused,
+            )?;
+            restored += 1;
         }
         Ok(restored)
     }
@@ -872,6 +871,40 @@ mod tests {
         assert_eq!(queue.get(42).unwrap().status(), &TransferStatus::Paused);
         assert_eq!(queue.get(43).unwrap().status(), &TransferStatus::Completed);
         assert!(page.has_more());
+    }
+
+    #[test]
+    fn restoring_a_page_does_not_overwrite_newer_live_file_state() {
+        use super::{DownloadListEntry, TransferListPage};
+
+        let mut queue = queue_with_one_item();
+        queue.apply_file_state(
+            42,
+            FileTransferState {
+                is_downloading_active: true,
+                downloaded_size: 512,
+                expected_size: 1024,
+                ..FileTransferState::default()
+            },
+        );
+        let stale_page = TransferListPage {
+            files: vec![DownloadListEntry {
+                file_id: 42,
+                chat_id: -100,
+                message_id: 7,
+                add_date: 10,
+                complete_date: 12,
+                is_paused: true,
+            }],
+            ..TransferListPage::default()
+        };
+
+        assert_eq!(queue.restore_page(&stale_page), Ok(0));
+        let item = queue.get(42).unwrap();
+        assert_eq!(item.status(), &TransferStatus::Downloading);
+        assert_eq!(item.priority(), Some(16));
+        assert_eq!(item.progress().downloaded_size, 512);
+        assert_eq!(item.progress().expected_size, 1024);
     }
 
     #[test]
