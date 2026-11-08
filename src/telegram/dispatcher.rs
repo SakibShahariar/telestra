@@ -500,7 +500,7 @@ mod shared_dispatcher_tests {
     #[test]
     fn shared_dispatcher_routes_messages_to_registered_account() {
         let (incoming, source) = mpsc::channel();
-        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming }).unwrap();
+        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming: source }).unwrap();
         let account = dispatcher.register_client(41).unwrap();
 
         incoming
@@ -518,7 +518,7 @@ mod shared_dispatcher_tests {
     #[test]
     fn shared_dispatcher_reports_messages_for_unregistered_clients() {
         let (incoming, source) = mpsc::channel();
-        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming }).unwrap();
+        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming: source }).unwrap();
 
         incoming
             .send(r#"{"@type":"updateNewChat","@client_id":47}"#.to_owned())
@@ -537,8 +537,8 @@ mod shared_dispatcher_tests {
     #[test]
     fn shared_dispatcher_reports_native_receive_failures() {
         let (incoming, source) = mpsc::channel();
-        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming }).unwrap();
-        drop(source);
+        let dispatcher = SharedDispatcher::spawn(ChannelSource { incoming: source }).unwrap();
+        drop(incoming);
 
         assert_eq!(
             dispatcher
