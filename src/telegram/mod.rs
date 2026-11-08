@@ -14,6 +14,8 @@ mod protocol;
 mod transport;
 mod worker;
 
+pub use tdlib_ffi::{TdJsonError, TdJsonLibrary};
+
 pub use decoder::{DecodeError, DecodedEnvelope, DecodedMessage, decode_envelope, decode_message};
 pub use dispatcher::{
     AccountMailboxTransport, ClientMailboxRegistry, ClientRequestSender, DispatchError,

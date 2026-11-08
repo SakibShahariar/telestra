@@ -1,0 +1,11 @@
+[package]
+name = "tdlib-ffi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Narrow dynamic C ABI boundary for TDLib's preferred JSON client-ID API"
+license = "GPL-3.0-or-later"
+
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
