@@ -82,7 +82,7 @@ The `td_json_client_create/send/receive/execute/destroy` family is explicitly de
 These constraints should shape the fake-transport tests before any live-account authentication is introduced.
 
 
-The adapter's detailed ownership, worker, event and shutdown contract is maintained in [TDLib adapter implementation contract](TDLIB_ADAPTER.md). The transport-independent protocol, decoder, event routing, lifecycle primitives and generic transport-owning worker are implemented; native FFI, GLib main-context handoff and package integration remain outstanding.
+The adapter's detailed ownership, worker, event and shutdown contract is maintained in [TDLib adapter implementation contract](TDLIB_ADAPTER.md). The transport-independent protocol, decoder, event routing, lifecycle primitives, generic worker, isolated native FFI loader and native mailbox adapters are implemented. Native source-build verification, application startup composition, GLib main-context handoff, Flatpak/multi-architecture packaging and end-to-end connectivity remain outstanding.
 
 ## Rust and desktop dependency baseline
 
