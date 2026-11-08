@@ -22,6 +22,18 @@ These APIs support genuine per-item and global pause/resume for items managed by
 
 The pause APIs above are explicitly scoped to the file download list. Do not present them as a universal pause mechanism for every arbitrary `downloadFile` transfer. A future direct-download resume flow must be designed and tested around the file's actual local/remote state and safe offsets; do not infer resumability merely from the presence of offset/limit parameters.
 
+## Current Rust adapter implementation
+
+The application-owned queue model now has a typed transfer-intent boundary:
+
+- `TransferCommand` serializes add, per-item pause/resume, global pause/resume and non-destructive remove operations into TDLib JSON requests carrying the worker's canonical `@extra` correlation ID.
+- `BackendWorker::send_transfer_command` sends those commands through the normal pending-request registration and response-correlation path.
+- `decode_transfer_update` recognizes `updateFileDownload`, `updateFile` and `updateFileRemovedFromDownloads`; malformed required fields are rejected, unrelated update types remain available to other handlers.
+- `TransferQueue::apply_tdlib_update` applies only authoritative TDLib updates to existing queue items. It does not create phantom items from progress events, and removal is applied only after TDLib confirms it.
+- File progress retains approximate downloaded size separately from the verified contiguous prefix and its offset.
+
+The initial `searchFileDownloads` restoration request, account startup wiring and GTK queue presentation are not connected yet. This remains a backend model/adapter implementation, not a finished user-facing transfer manager.
+
 ## Proposed product behavior
 
 1. Use TDLib's download list for message attachments when queue persistence and pause/resume controls are requested.
