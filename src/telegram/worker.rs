@@ -689,4 +689,34 @@ mod tests {
         );
         worker.join().unwrap();
     }
+
+    #[test]
+    fn worker_reports_protocol_failure_and_stops_as_failed() {
+        struct MalformedTransport;
+
+        impl JsonTransport for MalformedTransport {
+            fn send(&mut self, _request: &str) -> Result<(), TransportError> {
+                Ok(())
+            }
+
+            fn receive(&mut self, _timeout: Duration) -> Result<Option<String>, TransportError> {
+                Ok(Some(r#"{"@type":"updateNewChat","chat":}"#.to_owned()))
+            }
+
+            fn close(&mut self) -> Result<(), TransportError> {
+                Ok(())
+            }
+        }
+
+        let worker = BackendWorker::spawn(MalformedTransport).unwrap();
+        assert!(matches!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            WorkerEvent::ProtocolFailed { .. }
+        ));
+        assert_eq!(
+            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            WorkerEvent::Stopped(ClientLifecycle::Failed)
+        );
+        worker.join().unwrap();
+    }
 }

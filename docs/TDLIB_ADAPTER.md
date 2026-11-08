@@ -17,7 +17,7 @@ A single process-wide dispatcher must be the only caller of native `td_receive`.
 3. Inserting pending operations before sending requests, so an immediate response cannot race registration.
 4. Receiving and decoding every response/update in TDLib arrival order.
 5. Resolving only the pending request whose canonical `@extra` matches a response.
-6. amitting application-owned `BackendEvent` values; GTK-facing code must receive them through a thread-safe handoff and dispatch them on the GLib main context.
+6. emitting application-owned `BackendEvent` values; GTK-facing code must receive them through a thread-safe handoff and dispatch them on the GLib main context.
 7. Draining pending operations with an interruption/error result if the receive loop fails or the client shuts down.
 
 The event model distinguishes correlated responses, unsolicited updates, authorization-state changes, TDLib errors and transport failures. The dependency-free envelope decoder in `src/telegram/decoder.rs` validates complete JSON objects, extracts `@type` and string `@extra`, decodes TDLib error objects and authorization-state updates, and retains original JSON for ordinary responses and updates. It supports nested arrays/objects, escaped Unicode, and all valid JSON number forms while rejecting malformed input, duplicate keys and trailing data. It is an envelope decoder, not a complete generated TDLib schema. Unknown authorization states must be retained rather than causing a panic or silently changing state.
@@ -50,7 +50,7 @@ The transport, lifecycle, request correlation, decoder and event types are delib
 - Receive-loop failure and clean shutdown both draining pending operations.
 - One receive owner per client and no GTK access from the worker.
 
-The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, lifecycle transitions, worker response correlation, rejected request envelopes, receive failures and close confirmation. Native FFI, native package integration, GLib main-context handoff and end-to-end Telegram connectivity remain unimplemented.
+The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, lifecycle transitions, worker response correlation, rejected request envelopes, malformed-message protocol failures, send/receive failures and close confirmation. Native FFI, native package integration, GLib main-context handoff and end-to-end Telegram connectivity remain unimplemented.
 
 ## Native build gate
 
