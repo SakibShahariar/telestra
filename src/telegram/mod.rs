@@ -30,7 +30,8 @@ pub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEve
 pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};
 pub use protocol::{PendingRequests, RequestId, RequestIdSequence};
 pub use transfers::{
-    DownloadListEntry, DownloadedFileCounts, FileTransferState, TransferCommand, TransferItem,\n    TransferListPage, TransferProgress, TransferQueue,
+    DownloadListEntry, DownloadedFileCounts, FileTransferState, TransferCommand, TransferItem,
+    TransferListPage, TransferProgress, TransferQueue,
     TransferQueueError, TransferStatus, TransferUpdate,
 };
 pub use transport::{JsonTransport, TransportError, TransportOperation};
