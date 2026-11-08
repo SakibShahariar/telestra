@@ -19,7 +19,7 @@ pub use tdlib_ffi::{TdJsonError, TdJsonLibrary};
 pub use decoder::{DecodeError, DecodedEnvelope, DecodedMessage, decode_envelope, decode_message};
 pub use dispatcher::{
     AccountMailboxTransport, ClientMailboxRegistry, ClientRequestSender, DispatchError,
-    SharedDispatcher, SharedReceiveSource,
+    NativeTdLibReceiveSource, NativeTdLibRequestSender, SharedDispatcher, SharedReceiveSource,
 };
 pub use events::{AuthorizationState, BackendEvent, EventRouter, RoutedBackendEvent, TdlibError};
 pub use lifecycle::{ClientLifecycle, ClientState, LifecycleError};

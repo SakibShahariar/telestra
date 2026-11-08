@@ -74,9 +74,24 @@ Do not enable a native runtime dependency until the pinned TDLib source has been
 
 The transport-independent dispatcher is implemented as `SharedDispatcher`. It owns a dedicated thread and a `SharedReceiveSource`; only that thread polls the source. The source contract requires bounded receives and owned message strings, allowing the native TDLib adapter to copy its borrowed C response before polling again.
 
-Account registration is serialized through dispatcher commands. Each account receives a dedicated FIFO mailbox, and routing failures or native receive failures are surfaced through the dispatcher's event receiver rather than silently discarded. The abstraction is tested with a channel-backed source; it is not yet connected to TDLib's native C ABI.
+Account registration is serialized through dispatcher commands. Each account receives a dedicated FIFO mailbox, and routing failures or native receive failures are surfaced through the dispatcher's event receiver rather than silently discarded. The abstraction is tested with a channel-backed source. `NativeTdLibReceiveSource` now connects it to the isolated C ABI loader and copies each native response into an owned string.
 
 
 ## Account worker transport
 
-`AccountMailboxTransport` connects the existing account worker to a registered mailbox and a client-ID-aware request sender. It routes outgoing requests through the sender with the account's TDLib client ID, consumes only that account's mailbox, and sends the TDLib `close` request once when the worker begins shutdown. The sender and shared receive source are injected interfaces; neither is a native TDLib implementation yet.
+`AccountMailboxTransport` connects the existing account worker to a registered mailbox and a client-ID-aware request sender. It routes outgoing requests through the sender with the account's TDLib client ID, consumes only that account's mailbox, and sends the TDLib `close` request once when the worker begins shutdown. `NativeTdLibRequestSender` sends through the preferred `td_send(client_id, request)` API, while `NativeTdLibReceiveSource` is the only source that should be supplied to the process-wide dispatcher. Both share the loaded library handle.
+
+## Native adapter composition
+
+Load the pinned shared library once and share its handle between the request sender and receive dispatcher. Allocate a client ID and register its mailbox before sending the first request, so the first TDLib response cannot arrive before its route exists:
+
+```rust
+let library = TdJsonLibrary::load("libtdjson.so")?;
+let dispatcher = SharedDispatcher::spawn(NativeTdLibReceiveSource::new(library.clone()))?;
+let client_id = library.create_client_id();
+let mailbox = dispatcher.register_client(client_id)?;
+let sender = Arc::new(NativeTdLibRequestSender::new(library));
+let transport = AccountMailboxTransport::new(client_id, sender, mailbox);
+```
+
+The account worker owns `transport`; after it receives `authorizationStateClosed`, unregister that client from the dispatcher. The process-wide dispatcher must remain alive until every account has closed.

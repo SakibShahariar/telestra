@@ -11,7 +11,9 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use super::{DecodeError, JsonTransport, TransportError, TransportOperation, decode_envelope};
+use super::{
+    DecodeError, JsonTransport, TdJsonLibrary, TransportError, TransportOperation, decode_envelope,
+};
 
 /// A failure while routing a message from TDLib's shared receive stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -300,6 +302,46 @@ impl<S: ClientRequestSender> JsonTransport for AccountMailboxTransport<S> {
 pub trait SharedReceiveSource: Send + 'static {
     /// Receives the next message from TDLib's shared stream.
     fn receive(&mut self, timeout: Duration) -> Result<Option<String>, String>;
+}
+
+/// Native TDLib request sender using the preferred client-ID JSON API.
+pub struct NativeTdLibRequestSender {
+    library: TdJsonLibrary,
+}
+
+impl NativeTdLibRequestSender {
+    /// Creates a sender backed by a loaded TDLib shared library.
+    pub fn new(library: TdJsonLibrary) -> Self {
+        Self { library }
+    }
+}
+
+impl ClientRequestSender for NativeTdLibRequestSender {
+    fn send_request(&self, client_id: i32, request: &str) -> Result<(), String> {
+        self.library
+            .send(client_id, request)
+            .map_err(|error| error.to_string())
+    }
+}
+
+/// Native TDLib receive source for the process-wide shared dispatcher.
+pub struct NativeTdLibReceiveSource {
+    library: TdJsonLibrary,
+}
+
+impl NativeTdLibReceiveSource {
+    /// Creates the sole receive source for a loaded TDLib library.
+    pub fn new(library: TdJsonLibrary) -> Self {
+        Self { library }
+    }
+}
+
+impl SharedReceiveSource for NativeTdLibReceiveSource {
+    fn receive(&mut self, timeout: Duration) -> Result<Option<String>, String> {
+        self.library
+            .receive(timeout)
+            .map_err(|error| error.to_string())
+    }
 }
 
 enum DispatcherCommand {
