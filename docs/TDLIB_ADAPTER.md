@@ -52,6 +52,19 @@ The transport, lifecycle, request correlation, decoder and event types are delib
 
 The current tests cover the transport contract, request-ID generation and pending-request tracking, JSON envelope decoding, response/error correlation, update and authorization routing, lifecycle transitions, worker response correlation, rejected request envelopes, malformed-message protocol failures, send/receive failures and close confirmation. Native FFI, native package integration, GLib main-context handoff and end-to-end Telegram connectivity remain unimplemented.
 
+
+## Reproducible native build
+
+The pinned source build is driven by `scripts/build-tdlib.sh`. On Linux, install a C++17 toolchain, CMake, Git, gperf, OpenSSL and zlib development files, then run:
+
+```sh
+scripts/build-tdlib.sh
+```
+
+The script fetches the exact commit in `packaging/tdlib/source.env`, rejects modified or mismatched source checkouts, builds only the shared `tdjson` target, installs it under `target/tdlib`, and verifies the required client-ID API symbols plus runtime dependencies. Optional positional arguments override the source checkout, install prefix and CMake build directory; `TDLIB_BUILD_JOBS` controls parallelism.
+
+The dedicated TDLib workflow runs this build when its source pin, build scripts or workflow change. This verifies the current Linux host architecture only; x86_64/aarch64 package and Flatpak integration still require their own build and runtime checks.
+
 ## Native build gate
 
 Do not enable a native runtime dependency until the pinned TDLib source has been built reproducibly for the supported architectures, the preferred `td_create_client_id`, `td_send` and `td_receive` symbols and runtime dependencies have been inspected, and native-package plus Flatpak smoke tests pass. See [Architecture](ARCHITECTURE.md) for the candidate source pin and packaging checklist.

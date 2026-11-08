@@ -1,0 +1,37 @@
+name: TDLib native build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build-tdlib.sh"
+      - "scripts/verify-tdlib-source.sh"
+      - "packaging/tdlib/**"
+      - ".github/workflows/tdlib.yml"
+  pull_request:
+    paths:
+      - "scripts/build-tdlib.sh"
+      - "scripts/verify-tdlib-source.sh"
+      - "packaging/tdlib/**"
+      - ".github/workflows/tdlib.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build pinned TDLib JSON runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out Telestra
+        uses: actions/checkout@v4
+
+      - name: Install TDLib build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential binutils cmake git gperf libssl-dev zlib1g-dev
+
+      - name: Build and verify TDLib
+        run: scripts/build-tdlib.sh
