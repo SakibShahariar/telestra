@@ -187,7 +187,9 @@ pub fn decode_transfer_update(json: &str) -> Result<Option<TransferUpdate>, Deco
             let file_download = object
                 .get("file_download")
                 .and_then(Value::as_object)
-                .ok_or_else(|| parser.error("updateFileAddedToDownloads is missing file_download"))?;
+                .ok_or_else(|| {
+                    parser.error("updateFileAddedToDownloads is missing file_download")
+                })?;
             let file_id = file_download
                 .get("file_id")
                 .and_then(Value::as_i64)
