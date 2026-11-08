@@ -1,41 +1,40 @@
 # Telestra
 
-A native, feature-rich Telegram client for Linux, built with Rust, GTK4, libadwaita and TDLib.
+A native Linux Telegram client built with Rust, GTK4, libadwaita and TDLib.
 
-Telestra aims to combine a GNOME-native desktop experience with powerful tools for managing chats, media, files and multiple accounts. It is an independent client, not a fork of Telegram Desktop.
+Telestra is an independent desktop client designed around GNOME conventions, while aiming to remain usable on other Linux desktops. It is not a fork of Telegram Desktop.
 
-## Project status
+## Status
 
-**Early development.** The initial GTK4/libadwaita application shell is in place, but Telegram connectivity, authentication and messaging are not implemented. Telestra is not ready for everyday use.
+<badge>Early development</badge>
 
-## Planned direction
+The GTK4/libadwaita application shell and parts of the backend foundation are in place. **Telegram login, account connectivity and messaging are not yet available**, so Telestra is not ready for everyday use.
 
-- Native GTK4 and libadwaita interface, following GNOME design conventions.
-- Telegram functionality powered by TDLib.
-- Multiple-account and advanced chat-management workflows.
-- A capable download center with queues, priorities, retries and controls.
-- A unified, searchable media and file library.
-- Privacy, accessibility and keyboard-driven power-user features.
-- Flatpak packaging and support for Linux desktops beyond GNOME.
+## What we're building
 
-This list describes project goals, not implemented features. Telegram server-side Premium entitlements remain subject to Telegram's own account and subscription rules.
+- **Chats and messaging** — accounts, conversations, message workflows and search.
+- **Transfers** — a download center with queue management, progress and recovery controls.
+- **Media library** — searchable media and files, with filters and bulk actions.
+- **Power-user tools** — chat organization, keyboard workflows and multiple accounts.
+- **Privacy and accessibility** — local-data controls, discreet notifications, keyboard and assistive-technology support.
+- **Linux integration** — a native GTK experience, with Flatpak packaging and support beyond GNOME.
 
-## Technology
-
-- **Language:** Rust 2024 (Rust 1.85 or newer)
-- **UI:** GTK4 and libadwaita Rust bindings
-- **Telegram client library:** TDLib (integration adapter under evaluation)
-- **Packaging target:** Flatpak
+These are project goals, not claims about features available today. See the [roadmap](docs/ROADMAP.md) for progress and the [architecture notes](docs/ARCHITECTURE.md) for technical decisions.
 
 ## Development
 
-Install Rust 1.85 or newer and the GTK4/libadwaita development libraries for your distribution, then run:
+### Requirements
+
+- Rust 1.85 or newer
+- GTK4 and libadwaita development libraries
+
+Run the application shell:
 
 ```sh
 cargo run
 ```
 
-Useful checks:
+Run the project checks:
 
 ```sh
 cargo fmt --all -- --check
@@ -43,15 +42,15 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. The first window is only a UI shell; it does not connect to Telegram.
+The current application does not connect to Telegram. Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes.
 
-## Project documentation
+## Documentation
 
-- [Architecture direction](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Architecture](docs/ARCHITECTURE.md)
 - [Contributing](CONTRIBUTING.md)
 - [Repository guidance](AGENTS.md)
 
 ## License
 
-Telestra is licensed under **GPL-3.0-or-later**. See [LICENSE](LICENSE). Third-party components retain their own licenses.
+[GPL-3.0-or-later](LICENSE). Third-party components retain their respective licenses.
