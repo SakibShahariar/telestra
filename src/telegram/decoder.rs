@@ -614,18 +614,24 @@ mod tests {
     fn rejects_malformed_transfer_update_fields() {
         use super::decode_transfer_update;
 
-        assert!(decode_transfer_update(
-            r#"{"@type":"updateFileDownload","file_id":42,"complete_date":0,"is_paused":"yes"}"#
-        )
-        .is_err());
-        assert!(decode_transfer_update(
-            r#"{"@type":"updateFile","file":{"id":42,"expected_size":-1,"local":{}}}"#
-        )
-        .is_err());
-        assert!(decode_transfer_update(
-            r#"{"@type":"updateFileRemovedFromDownloads","file_id":2147483648}"#
-        )
-        .is_err());
+        assert!(
+            decode_transfer_update(
+                r#"{"@type":"updateFileDownload","file_id":42,"complete_date":0,"is_paused":"yes"}"#
+            )
+            .is_err()
+        );
+        assert!(
+            decode_transfer_update(
+                r#"{"@type":"updateFile","file":{"id":42,"expected_size":-1,"local":{}}}"#
+            )
+            .is_err()
+        );
+        assert!(
+            decode_transfer_update(
+                r#"{"@type":"updateFileRemovedFromDownloads","file_id":2147483648}"#
+            )
+            .is_err()
+        );
     }
 
 }

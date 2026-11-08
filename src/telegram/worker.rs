@@ -457,10 +457,6 @@ mod tests {
 
         worker.send_transfer_command(request_id, &command).unwrap();
 
-        assert_eq!(
-            *sent.lock().unwrap(),
-            vec![command.to_tdlib_json(request_id)]
-        );
         assert!(matches!(
             worker
                 .events()
@@ -471,6 +467,10 @@ mod tests {
                 ..
             } if id == request_id && operation == "addFileToDownloads"
         ));
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![command.to_tdlib_json(request_id)]
+        );
 
         worker.shutdown().unwrap();
         assert!(matches!(

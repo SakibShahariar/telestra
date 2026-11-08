@@ -474,11 +474,13 @@ mod tests {
         use super::TransferUpdate;
 
         let mut queue = queue_with_one_item();
-        assert!(queue.apply_tdlib_update(TransferUpdate::DownloadListChanged {
-            file_id: 42,
-            complete_date: 0,
-            is_paused: true,
-        }));
+        assert!(
+            queue.apply_tdlib_update(TransferUpdate::DownloadListChanged {
+                file_id: 42,
+                complete_date: 0,
+                is_paused: true,
+            })
+        );
         assert_eq!(queue.get(42).unwrap().status(), &TransferStatus::Paused);
 
         assert!(queue.apply_tdlib_update(TransferUpdate::FileStateChanged {
@@ -492,16 +494,18 @@ mod tests {
                 expected_size: 8192,
             },
         }));
-        assert_eq!(queue.get(42).unwrap().status(), &TransferStatus::Downloading);
-        assert_eq!(queue.get(42).unwrap().progress().downloaded_prefix_size, 2048);
+        assert_eq!(
+            queue.get(42).unwrap().status(),
+            &TransferStatus::Downloading
+        );
+        assert_eq!(
+            queue.get(42).unwrap().progress().downloaded_prefix_size,
+            2048
+        );
 
-        assert!(queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads {
-            file_id: 42,
-        }));
+        assert!(queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads { file_id: 42 }));
         assert!(queue.is_empty());
-        assert!(!queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads {
-            file_id: 42,
-        }));
+        assert!(!queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads { file_id: 42 }));
     }
 
     #[test]
