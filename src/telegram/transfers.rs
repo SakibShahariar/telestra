@@ -148,6 +148,72 @@ impl TransferCommand {
     }
 }
 
+/// Aggregate counts returned by TDLib for a download-list search.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DownloadedFileCounts {
+    pub active_count: i32,
+    pub paused_count: i32,
+    pub completed_count: i32,
+}
+
+/// One message attachment in TDLib's persistent download list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadListEntry {
+    pub file_id: i32,
+    pub chat_id: i64,
+    pub message_id: i64,
+    pub add_date: i32,
+    pub complete_date: i32,
+    pub is_paused: bool,
+}
+
+/// One page returned by searchFileDownloads.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TransferListPage {
+    pub total_counts: DownloadedFileCounts,
+    pub files: Vec<DownloadListEntry>,
+    /// Opaque TDLib cursor; an empty string means there are no more pages.
+    pub next_offset: String,
+}
+
+impl TransferListPage {
+    pub const PAGE_SIZE: i32 = 100;
+
+    pub fn has_more(&self) -> bool {
+        !self.next_offset.is_empty()
+    }
+
+    /// Builds a correlated request for the next page of the complete list.
+    /// The cursor is opaque and JSON-escaped rather than interpreted locally.
+    pub fn search_request_json(request_id: RequestId, offset: &str) -> String {
+        let escaped_offset = escape_json_string(offset);
+        format!(
+            r#"{"@type":"searchFileDownloads","query":"","only_active":false,"only_completed":false,"offset":"{escaped_offset}","limit":{},"@extra":"{}"}"#,
+            Self::PAGE_SIZE,
+            request_id.to_extra()
+        )
+    }
+}
+
+fn escape_json_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            character if character <= '\u{001f}' => {
+                use std::fmt::Write as _;
+                let _ = write!(escaped, "\\u{:04x}", character as u32);
+            }
+            character => escaped.push(character),
+        }
+    }
+    escaped
+}
+
 /// Authoritative TDLib updates that can change a download queue item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransferUpdate {
@@ -300,6 +366,41 @@ impl TransferQueue {
         );
         self.insertion_order.push(file_id);
         Ok(())
+    }
+
+    /// Restores a complete page from TDLib's initial list query.
+    ///
+    /// Existing items are reconciled instead of duplicated, which also makes
+    /// it safe to apply a page after an incremental add notification arrived.
+    /// File IDs are validated before any page entries are applied.
+    pub fn restore_page(
+        &mut self,
+        page: &TransferListPage,
+    ) -> Result<usize, TransferQueueError> {
+        if let Some(entry) = page.files.iter().find(|entry| entry.file_id <= 0) {
+            return Err(TransferQueueError::InvalidFileId(entry.file_id));
+        }
+
+        let mut restored = 0;
+        for entry in &page.files {
+            if self.items.contains_key(&entry.file_id) {
+                self.apply_download_list_update(
+                    entry.file_id,
+                    entry.complete_date,
+                    entry.is_paused,
+                );
+            } else {
+                self.restore_message_attachment(
+                    entry.file_id,
+                    entry.chat_id,
+                    entry.message_id,
+                    entry.complete_date,
+                    entry.is_paused,
+                )?;
+                restored += 1;
+            }
+        }
+        Ok(restored)
     }
 
     /// Requests pause or resume for one list-managed item.
@@ -732,6 +833,90 @@ mod tests {
         assert_eq!(
             queue.set_item_paused(42, false),
             Err(TransferQueueError::NotPausable(42))
+        );
+    }
+
+    #[test]
+    fn restores_download_list_pages_without_inventing_priority_or_duplicates() {
+        use super::{DownloadedFileCounts, DownloadListEntry, TransferListPage};
+
+        let page = TransferListPage {
+            total_counts: DownloadedFileCounts {
+                active_count: 2,
+                paused_count: 1,
+                completed_count: 4,
+            },
+            files: vec![
+                DownloadListEntry {
+                    file_id: 42,
+                    chat_id: -100,
+                    message_id: 9,
+                    add_date: 10,
+                    complete_date: 0,
+                    is_paused: true,
+                },
+                DownloadListEntry {
+                    file_id: 43,
+                    chat_id: -100,
+                    message_id: 10,
+                    add_date: 11,
+                    complete_date: 12,
+                    is_paused: false,
+                },
+            ],
+            next_offset: "cursor-2".to_owned(),
+        };
+        let mut queue = TransferQueue::new();
+        assert_eq!(queue.restore_page(&page), Ok(2));
+        assert_eq!(queue.restore_page(&page), Ok(0));
+        assert_eq!(queue.len(), 2);
+        assert_eq!(queue.get(42).unwrap().priority(), None);
+        assert_eq!(queue.get(42).unwrap().status(), &TransferStatus::Paused);
+        assert_eq!(queue.get(43).unwrap().status(), &TransferStatus::Completed);
+        assert!(page.has_more());
+    }
+
+    #[test]
+    fn invalid_page_is_rejected_before_any_queue_mutation() {
+        use super::{DownloadListEntry, TransferListPage};
+
+        let mut queue = queue_with_one_item();
+        let page = TransferListPage {
+            files: vec![
+                DownloadListEntry {
+                    file_id: 43,
+                    chat_id: 1,
+                    message_id: 2,
+                    add_date: 0,
+                    complete_date: 0,
+                    is_paused: false,
+                },
+                DownloadListEntry {
+                    file_id: 0,
+                    chat_id: 1,
+                    message_id: 3,
+                    add_date: 0,
+                    complete_date: 0,
+                    is_paused: false,
+                },
+            ],
+            ..TransferListPage::default()
+        };
+        assert_eq!(
+            queue.restore_page(&page),
+            Err(TransferQueueError::InvalidFileId(0))
+        );
+        assert!(queue.get(43).is_none());
+        assert_eq!(queue.len(), 1);
+    }
+
+    #[test]
+    fn search_request_escapes_opaque_offset_and_correlates_request() {
+        use super::TransferListPage;
+
+        assert_eq!(
+            TransferListPage::search_request_json(RequestId::new(91), "a\"b\\c"),
+            r#"{"@type":"searchFileDownloads","query":"","only_active":false,"only_completed":false,"offset":"a\"b\\c","limit":100,"@extra":"telestra:91"}"#
         );
     }
 
