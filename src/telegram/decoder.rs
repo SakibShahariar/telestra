@@ -170,7 +170,7 @@ fn decode_authorization_state(state: &str) -> AuthorizationState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Value {
     Null,
-    Bool,
+    Bool(bool),
     Number(Option<i64>),
     String(String),
     Array,
@@ -189,6 +189,14 @@ impl Value {
     fn as_i64(&self) -> Option<i64> {
         if let Self::Number(value) = self {
             *value
+        } else {
+            None
+        }
+    }
+
+    fn as_bool(&self) -> Option<bool> {
+        if let Self::Bool(value) = self {
+            Some(*value)
         } else {
             None
         }
@@ -246,11 +254,11 @@ impl Parser<'_> {
             Some(b'[') => self.parse_array(depth + 1),
             Some(b't') => {
                 self.parse_literal(b"true")?;
-                Ok(Value::Bool)
+                Ok(Value::Bool(true))
             }
             Some(b'f') => {
                 self.parse_literal(b"false")?;
-                Ok(Value::Bool)
+                Ok(Value::Bool(false))
             }
             Some(b'n') => {
                 self.parse_literal(b"null")?;
