@@ -122,6 +122,25 @@ References:
 - [TDLib updateSpeedLimitNotification](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1update_speed_limit_notification.html)
 - [Telegram file transfer documentation](https://core.telegram.org/api/files)
 
+## Automatic download rules (issue #21)
+
+TDLib exposes native automatic-download settings per network type through `setAutoDownloadSettings(settings, type)`. The settings include an enable/disable switch and maximum sizes for photos, videos and other files, plus video/story/audio preloading preferences. TDLib's network types distinguish mobile, Wi-Fi and other connections.
+
+This supports native per-connection and broad file-category rules. It does not expose a per-chat auto-download rule in this settings object.
+
+Implementation direction:
+
+- Use TDLib's settings API for the global mobile/Wi-Fi/other presets and photo/video/other-file size thresholds.
+- Keep per-chat exceptions in Telestra's own settings and evaluate them before issuing a download request.
+- Do not duplicate or silently override TDLib's global network presets when a chat-specific rule applies; define and test precedence explicitly.
+- Treat unknown network type conservatively and fall back to the user's explicit "other" policy.
+- Keep upload-video bitrate settings separate from download rules; they are not upload bandwidth caps.
+
+References:
+- [setAutoDownloadSettings](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_auto_download_settings.html)
+- [autoDownloadSettings](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1auto_download_settings.html)
+- [NetworkType](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1network_type.html)
+
 ## Verification plan
 
 - Unit-test queue state transitions with fake TDLib events: queued, active, paused, resumed, completed, canceled, and removed.
