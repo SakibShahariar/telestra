@@ -23,5 +23,8 @@ fn loads_pinned_tdlib_and_executes_a_synchronous_request() {
     );
 
     let client_id = library.create_client_id();
-    assert!(client_id >= 0, "TDLib returned an invalid client identifier");
+    assert!(
+        client_id >= 0,
+        "TDLib returned an invalid client identifier"
+    );
 }
