@@ -11,7 +11,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "crates/tdlib-ffi/**"
-      - "tests/tdlib_native_smoke.rs"
+      - "crates/tdlib-ffi/tests/tdlib_native_smoke.rs"
   pull_request:
     paths:
       - "scripts/build-tdlib.sh"
@@ -44,4 +44,4 @@ jobs:
         run: |
           library="$(find target/tdlib/lib -type f -name 'libtdjson.so*' -print -quit)"
           test -n "$library"
-          TELESTRA_TDLIB_LIBRARY="$library" cargo test --locked --test tdlib_native_smoke
+          TELESTRA_TDLIB_LIBRARY="$library" cargo test --manifest-path crates/tdlib-ffi/Cargo.toml --test tdlib_native_smoke
