@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 
 use super::{AuthorizationState, TdlibError};
+use super::transfers::{FileTransferState, TransferUpdate};
 
 /// A decoded TDLib message envelope.
 #[derive(Debug, Clone, PartialEq, Eq)]
