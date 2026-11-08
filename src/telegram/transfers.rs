@@ -537,14 +537,13 @@ impl TransferQueue {
                 if self.items.contains_key(&file_id) {
                     self.apply_download_list_update(file_id, complete_date, is_paused)
                 } else if self.hydration_in_progress {
-                    self.pending_live_updates
-                        .entry(file_id)
-                        .or_default()
-                        .push(TransferUpdate::DownloadListChanged {
+                    self.pending_live_updates.entry(file_id).or_default().push(
+                        TransferUpdate::DownloadListChanged {
                             file_id,
                             complete_date,
                             is_paused,
-                        });
+                        },
+                    );
                     false
                 } else {
                     false
@@ -967,11 +966,13 @@ mod tests {
 
         let mut queue = TransferQueue::new();
         queue.begin_hydration();
-        assert!(!queue.apply_tdlib_update(TransferUpdate::DownloadListChanged {
-            file_id: 44,
-            complete_date: 0,
-            is_paused: true,
-        }));
+        assert!(
+            !queue.apply_tdlib_update(TransferUpdate::DownloadListChanged {
+                file_id: 44,
+                complete_date: 0,
+                is_paused: true,
+            })
+        );
         assert!(!queue.apply_tdlib_update(TransferUpdate::FileStateChanged {
             file_id: 44,
             state: FileTransferState {
@@ -1009,9 +1010,7 @@ mod tests {
 
         let mut queue = TransferQueue::new();
         queue.begin_hydration();
-        assert!(!queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads {
-            file_id: 45,
-        }));
+        assert!(!queue.apply_tdlib_update(TransferUpdate::RemovedFromDownloads { file_id: 45 }));
         let stale_snapshot = TransferListPage {
             files: vec![DownloadListEntry {
                 file_id: 45,
