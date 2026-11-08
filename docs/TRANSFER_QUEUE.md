@@ -28,7 +28,7 @@ The application-owned queue model now has a typed transfer-intent boundary:
 
 - `TransferCommand` serializes add, per-item pause/resume, global pause/resume and non-destructive remove operations into TDLib JSON requests carrying the worker's canonical `@extra` correlation ID.
 - `BackendWorker::send_transfer_command` sends those commands through the normal pending-request registration and response-correlation path.
-- `decode_transfer_update` recognizes `updateFileDownload`, `updateFile` and `updateFileRemovedFromDownloads`; malformed required fields are rejected, unrelated update types remain available to other handlers.
+- `decode_transfer_update` recognizes `updateFileAddedToDownloads`, `updateFileDownload`, `updateFile` and `updateFileRemovedFromDownloads`; malformed required fields are rejected, unrelated update types remain available to other handlers. The added-to-list event restores message/chat identity without inventing a priority.
 - `TransferQueue::apply_tdlib_update` applies only authoritative TDLib updates to existing queue items. It does not create phantom items from progress events, and removal is applied only after TDLib confirms it.
 - File progress retains approximate downloaded size separately from the verified contiguous prefix and its offset.
 
