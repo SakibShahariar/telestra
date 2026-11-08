@@ -585,6 +585,7 @@ mod tests {
         FileTransferState, TransferCommand, TransferProgress, TransferQueue, TransferQueueError,
         TransferStatus,
     };
+    use crate::telegram::RequestId;
 
     fn queue_with_one_item() -> TransferQueue {
         let mut queue = TransferQueue::new();
