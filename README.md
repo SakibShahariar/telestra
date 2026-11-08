@@ -6,7 +6,7 @@ Telestra is an independent desktop client designed around GNOME conventions, whi
 
 ## Status
 
-<badge>Early development</badge>
+**Early development.**
 
 The GTK4/libadwaita application shell and parts of the backend foundation are in place. **Telegram login, account connectivity and messaging are not yet available**, so Telestra is not ready for everyday use.
 
