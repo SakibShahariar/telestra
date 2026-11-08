@@ -377,6 +377,9 @@ impl SharedDispatcher {
 impl Drop for SharedDispatcher {
     fn drop(&mut self) {
         let _ = self.commands.send(DispatcherCommand::Stop);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
     }
 }
 
@@ -561,5 +564,35 @@ mod shared_dispatcher_tests {
             Err(DispatchError::DuplicateClient(43))
         ));
         dispatcher.shutdown().unwrap();
+    }
+
+    #[test]
+    fn dropping_dispatcher_joins_the_receive_thread() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        struct DropObservedSource(Arc<AtomicBool>);
+
+        impl SharedReceiveSource for DropObservedSource {
+            fn receive(&mut self, _timeout: Duration) -> Result<Option<String>, String> {
+                Ok(None)
+            }
+        }
+
+        impl Drop for DropObservedSource {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+
+        let source_dropped = Arc::new(AtomicBool::new(false));
+        let dispatcher = SharedDispatcher::spawn(DropObservedSource(Arc::clone(
+            &source_dropped,
+        )))
+        .unwrap();
+
+        drop(dispatcher);
+
+        assert!(source_dropped.load(Ordering::SeqCst));
     }
 }
