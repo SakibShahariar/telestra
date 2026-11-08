@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 
+use super::protocol::RequestId;
+
 /// Current state of one message-attachment download.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransferStatus {
@@ -102,6 +104,38 @@ pub enum TransferCommand {
         /// a separate explicit user choice.
         delete_from_cache: bool,
     },
+}
+
+impl TransferCommand {
+    /// Serializes this intent as a TDLib JSON request with worker correlation.
+    ///
+    /// All fields are numeric or boolean, and the request ID's extra value is
+    /// generated internally, so no caller-provided text is interpolated.
+    pub fn to_tdlib_json(&self, request_id: RequestId) -> String {
+        let extra = request_id.to_extra();
+        match self {
+            Self::AddToDownloads {
+                file_id,
+                chat_id,
+                message_id,
+                priority,
+            } => format!(
+                r#"{{"@type":"addFileToDownloads","file_id":{file_id},"chat_id":{chat_id},"message_id":{message_id},"priority":{priority},"@extra":"{extra}"}}"#
+            ),
+            Self::TogglePaused { file_id, is_paused } => format!(
+                r#"{{"@type":"toggleDownloadIsPaused","file_id":{file_id},"is_paused":{is_paused},"@extra":"{extra}"}}"#
+            ),
+            Self::ToggleAllPaused { are_paused } => format!(
+                r#"{{"@type":"toggleAllDownloadsArePaused","are_paused":{are_paused},"@extra":"{extra}"}}"#
+            ),
+            Self::RemoveFromDownloads {
+                file_id,
+                delete_from_cache,
+            } => format!(
+                r#"{{"@type":"removeFileFromDownloads","file_id":{file_id},"delete_from_cache":{delete_from_cache},"@extra":"{extra}"}}"#
+            ),
+        }
+    }
 }
 
 /// Errors returned when a transfer intent cannot be represented safely.
@@ -382,6 +416,48 @@ mod tests {
         let mut queue = TransferQueue::new();
         queue.enqueue_message_attachment(42, -100, 7, 16).unwrap();
         queue
+    }
+
+
+    #[test]
+    fn transfer_commands_serialize_as_correlated_tdlib_requests() {
+        use super::TransferCommand;
+        use crate::telegram::RequestId;
+
+        let request_id = RequestId::new(7);
+        let cases = [
+            (
+                TransferCommand::AddToDownloads {
+                    file_id: 42,
+                    chat_id: -100,
+                    message_id: 9,
+                    priority: 16,
+                },
+                r#"{"@type":"addFileToDownloads","file_id":42,"chat_id":-100,"message_id":9,"priority":16,"@extra":"telestra:7"}"#,
+            ),
+            (
+                TransferCommand::TogglePaused {
+                    file_id: 42,
+                    is_paused: true,
+                },
+                r#"{"@type":"toggleDownloadIsPaused","file_id":42,"is_paused":true,"@extra":"telestra:7"}"#,
+            ),
+            (
+                TransferCommand::ToggleAllPaused { are_paused: false },
+                r#"{"@type":"toggleAllDownloadsArePaused","are_paused":false,"@extra":"telestra:7"}"#,
+            ),
+            (
+                TransferCommand::RemoveFromDownloads {
+                    file_id: 42,
+                    delete_from_cache: false,
+                },
+                r#"{"@type":"removeFileFromDownloads","file_id":42,"delete_from_cache":false,"@extra":"telestra:7"}"#,
+            ),
+        ];
+
+        for (command, expected) in cases {
+            assert_eq!(command.to_tdlib_json(request_id), expected);
+        }
     }
 
     #[test]
