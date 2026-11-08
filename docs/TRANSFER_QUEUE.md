@@ -141,6 +141,12 @@ References:
 - [autoDownloadSettings](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1auto_download_settings.html)
 - [NetworkType](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1network_type.html)
 
+## Current implementation status
+
+A pure Rust queue model now exists in `src/telegram/transfers.rs`. It provides typed add/pause/resume/global-pause/remove intents, preserves insertion order, restores message-attachment entries from TDLib's initial list result without inventing an unknown priority, and applies authoritative file/list updates. Removal requests explicitly preserve the TDLib cache.
+
+The model is not yet wired to the account worker's TDLib JSON requests or a GTK queue view. Direct-download cancellation is a separate API path and is not represented as a message-list pause command. Do not describe this as a complete transfer queue until those integration layers and end-to-end tests are implemented.
+
 ## Verification plan
 
 - Unit-test queue state transitions with fake TDLib events: queued, active, paused, resumed, completed, canceled, and removed.
