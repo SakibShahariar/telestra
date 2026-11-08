@@ -456,7 +456,10 @@ mod tests {
     #[test]
     fn worker_sends_correlated_transfer_list_page_requests() {
         let request_id = RequestId::new(80);
-        let response = format!(r#"{{"@type":"foundFileDownloads","total_counts":{{"active_count":0,"paused_count":0,"completed_count":0}},"files":[],"next_offset":"","@extra":"{}"}}"#, request_id.to_extra());
+        let response = format!(
+            r#"{{"@type":"foundFileDownloads","total_counts":{{"active_count":0,"paused_count":0,"completed_count":0}},"files":[],"next_offset":"","@extra":"{}"}}"#,
+            request_id.to_extra()
+        );
         let sent = Arc::new(Mutex::new(Vec::new()));
         let transport = FakeTransport {
             incoming: VecDeque::from([response]),
@@ -485,7 +488,10 @@ mod tests {
         );
 
         worker.shutdown().unwrap();
-        worker.events().recv_timeout(Duration::from_secs(2)).unwrap();
+        worker
+            .events()
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
         worker.join().unwrap();
     }
 

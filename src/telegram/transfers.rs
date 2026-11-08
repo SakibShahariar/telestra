@@ -373,10 +373,7 @@ impl TransferQueue {
     /// Existing items are reconciled instead of duplicated, which also makes
     /// it safe to apply a page after an incremental add notification arrived.
     /// File IDs are validated before any page entries are applied.
-    pub fn restore_page(
-        &mut self,
-        page: &TransferListPage,
-    ) -> Result<usize, TransferQueueError> {
+    pub fn restore_page(&mut self, page: &TransferListPage) -> Result<usize, TransferQueueError> {
         if let Some(entry) = page.files.iter().find(|entry| entry.file_id <= 0) {
             return Err(TransferQueueError::InvalidFileId(entry.file_id));
         }
@@ -839,7 +836,7 @@ mod tests {
 
     #[test]
     fn restores_download_list_pages_without_inventing_priority_or_duplicates() {
-        use super::{DownloadedFileCounts, DownloadListEntry, TransferListPage};
+        use super::{DownloadListEntry, DownloadedFileCounts, TransferListPage};
 
         let page = TransferListPage {
             total_counts: DownloadedFileCounts {

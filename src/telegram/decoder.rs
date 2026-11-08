@@ -184,7 +184,9 @@ pub fn decode_transfer_list_page(json: &str) -> Result<TransferListPage, DecodeE
             .and_then(Value::as_i64)
             .and_then(|value| i32::try_from(value).ok())
             .filter(|value| *value >= 0)
-            .ok_or_else(|| parser.error("download counts contain a missing, negative or invalid field"))
+            .ok_or_else(|| {
+                parser.error("download counts contain a missing, negative or invalid field")
+            })
     };
     let total_counts = DownloadedFileCounts {
         active_count: count("active_count")?,
@@ -829,9 +831,7 @@ mod tests {
     #[test]
     fn decodes_initial_download_list_page_and_pagination_cursor() {
         use super::decode_transfer_list_page;
-        use crate::telegram::{
-            DownloadListEntry, DownloadedFileCounts, TransferListPage,
-        };
+        use crate::telegram::{DownloadListEntry, DownloadedFileCounts, TransferListPage};
 
         let json = r#"{"@type":"foundFileDownloads","total_counts":{"active_count":2,"paused_count":1,"completed_count":4},"files":[{"file_id":42,"message":{"id":9,"chat_id":-100},"add_date":10,"complete_date":0,"is_paused":true},{"file_id":43,"message":{"id":10,"chat_id":-100},"add_date":11,"complete_date":12,"is_paused":false}],"next_offset":"cursor-2"}"#;
         assert_eq!(
