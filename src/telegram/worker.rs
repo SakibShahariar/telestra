@@ -710,11 +710,17 @@ mod tests {
 
         let worker = BackendWorker::spawn(MalformedTransport).unwrap();
         assert!(matches!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::ProtocolFailed { .. }
         ));
         assert_eq!(
-            worker.events().recv_timeout(Duration::from_secs(2)).unwrap(),
+            worker
+                .events()
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
             WorkerEvent::Stopped(ClientLifecycle::Failed)
         );
         worker.join().unwrap();
