@@ -6,7 +6,9 @@
 
 use std::collections::BTreeMap;
 
-use super::transfers::{\n    DownloadListEntry, DownloadedFileCounts, FileTransferState, TransferListPage, TransferUpdate,\n};
+use super::transfers::{
+    DownloadListEntry, DownloadedFileCounts, FileTransferState, TransferListPage, TransferUpdate,
+};
 use super::{AuthorizationState, TdlibError};
 
 /// A decoded TDLib message envelope.
@@ -412,7 +414,7 @@ enum Value {
     Bool(bool),
     Number(Option<i64>),
     String(String),
-    Array,
+    Array(Vec<Value>),
     Object(BTreeMap<String, Value>),
 }
 
