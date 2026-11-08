@@ -182,6 +182,45 @@ pub fn decode_transfer_update(json: &str) -> Result<Option<TransferUpdate>, Deco
             .ok_or_else(|| parser.error("TDLib transfer update is missing an integer field"))
     };
     match kind {
+        "updateFileAddedToDownloads" => {
+            let file_download = object
+                .get("file_download")
+                .and_then(Value::as_object)
+                .ok_or_else(|| parser.error("updateFileAddedToDownloads is missing file_download"))?;
+            let file_id = file_download
+                .get("file_id")
+                .and_then(Value::as_i64)
+                .and_then(|value| i32::try_from(value).ok())
+                .ok_or_else(|| parser.error("file_download has an invalid file_id"))?;
+            let complete_date = file_download
+                .get("complete_date")
+                .and_then(Value::as_i64)
+                .and_then(|value| i32::try_from(value).ok())
+                .ok_or_else(|| parser.error("file_download has an invalid complete_date"))?;
+            let is_paused = file_download
+                .get("is_paused")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| parser.error("file_download is missing boolean is_paused"))?;
+            let message = file_download
+                .get("message")
+                .and_then(Value::as_object)
+                .ok_or_else(|| parser.error("file_download is missing message object"))?;
+            let chat_id = message
+                .get("chat_id")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| parser.error("file_download message has an invalid chat_id"))?;
+            let message_id = message
+                .get("id")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| parser.error("file_download message has an invalid id"))?;
+            Ok(Some(TransferUpdate::AddedToDownloads {
+                file_id,
+                chat_id,
+                message_id,
+                complete_date,
+                is_paused,
+            }))
+        }
         "updateFileDownload" => {
             let file_id = i32::try_from(required_i64("file_id")?)
                 .map_err(|_| parser.error("TDLib transfer file_id is out of range"))?;
@@ -679,6 +718,18 @@ mod tests {
         use super::decode_transfer_update;
         use crate::telegram::{FileTransferState, TransferUpdate};
 
+        assert_eq!(
+            decode_transfer_update(
+                r#"{"@type":"updateFileAddedToDownloads","file_download":{"file_id":42,"message":{"id":9,"chat_id":-100},"add_date":1,"complete_date":0,"is_paused":false},"counts":{}}"#
+            ),
+            Ok(Some(TransferUpdate::AddedToDownloads {
+                file_id: 42,
+                chat_id: -100,
+                message_id: 9,
+                complete_date: 0,
+                is_paused: false,
+            }))
+        );
         assert_eq!(
             decode_transfer_update(
                 r#"{"@type":"updateFileDownload","file_id":42,"complete_date":0,"is_paused":true,"counts":{}}"#

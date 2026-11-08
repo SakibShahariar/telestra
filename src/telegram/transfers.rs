@@ -151,6 +151,13 @@ impl TransferCommand {
 /// Authoritative TDLib updates that can change a download queue item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransferUpdate {
+    AddedToDownloads {
+        file_id: i32,
+        chat_id: i64,
+        message_id: i64,
+        complete_date: i32,
+        is_paused: bool,
+    },
     DownloadListChanged {
         file_id: i32,
         complete_date: i32,
@@ -353,6 +360,26 @@ impl TransferQueue {
     /// Returns false when the update refers to an item not currently tracked.
     pub fn apply_tdlib_update(&mut self, update: TransferUpdate) -> bool {
         match update {
+            TransferUpdate::AddedToDownloads {
+                file_id,
+                chat_id,
+                message_id,
+                complete_date,
+                is_paused,
+            } => {
+                if self.items.contains_key(&file_id) {
+                    self.apply_download_list_update(file_id, complete_date, is_paused)
+                } else {
+                    self.restore_message_attachment(
+                        file_id,
+                        chat_id,
+                        message_id,
+                        complete_date,
+                        is_paused,
+                    )
+                    .is_ok()
+                }
+            }
             TransferUpdate::DownloadListChanged {
                 file_id,
                 complete_date,
@@ -503,6 +530,25 @@ mod tests {
         for (command, expected) in cases {
             assert_eq!(command.to_tdlib_json(request_id), expected);
         }
+    }
+
+    #[test]
+    fn applies_added_download_update_without_inventing_priority() {
+        use super::TransferUpdate;
+
+        let mut queue = TransferQueue::new();
+        assert!(queue.apply_tdlib_update(TransferUpdate::AddedToDownloads {
+            file_id: 42,
+            chat_id: -100,
+            message_id: 9,
+            complete_date: 0,
+            is_paused: true,
+        }));
+        let item = queue.get(42).unwrap();
+        assert_eq!(item.chat_id(), -100);
+        assert_eq!(item.message_id(), 9);
+        assert_eq!(item.priority(), None);
+        assert_eq!(item.status(), &TransferStatus::Paused);
     }
 
     #[test]
