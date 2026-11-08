@@ -32,7 +32,7 @@ The application-owned queue model now has a typed transfer-intent boundary:
 - `TransferQueue::apply_tdlib_update` applies only authoritative TDLib updates to existing queue items. It does not create phantom items from progress events, and removal is applied only after TDLib confirms it.
 - File progress retains approximate downloaded size separately from the verified contiguous prefix and its offset.
 
-The initial `searchFileDownloads` restoration request, account startup wiring and GTK queue presentation are not connected yet. This remains a backend model/adapter implementation, not a finished user-facing transfer manager.
+The backend now decodes `foundFileDownloads` pages, retains TDLib's opaque `next_offset` cursor and aggregate counts, builds correlated `searchFileDownloads` requests, and can restore each page into the queue model without inventing a priority or duplicating entries. The account startup sequence still does not issue the initial query, walk subsequent pages, or coordinate live updates with hydration. GTK queue presentation is also not connected. This remains a backend model/adapter implementation, not a finished user-facing transfer manager.
 
 ## Proposed product behavior
 
@@ -49,7 +49,7 @@ The initial `searchFileDownloads` restoration request, account startup wiring an
 - List persistence depends on TDLib's message database being enabled.
 - A direct `downloadFile` request is not automatically a list item and must not be assumed to respond to list pause commands.
 - Priority is bounded to 1–32. Equal-priority ordering is TDLib-defined (most recently requested first), not arbitrary drag-and-drop order.
-- The initial download list must be loaded before relying on subsequent `updateFileDownload` notifications; TDLib documents that these updates are sent only after the list is first loaded.
+- The initial download list must be loaded before relying on subsequent `updateFileDownload` notifications; TDLib documents that these updates are sent only after the list is first loaded. Use the returned opaque `next_offset` unchanged until it is empty, and reconcile incremental add/remove events that arrive while pages are being hydrated.
 - One file should not be scheduled as multiple concurrent ranges; TDLib maintainers state that only one concurrent download request per file is supported.
 
 ## Concurrency limits (issue #16)
@@ -163,7 +163,7 @@ The model is not yet wired to the account worker's TDLib JSON requests or a GTK 
 
 - Unit-test queue state transitions with fake TDLib events: queued, active, paused, resumed, completed, canceled, and removed.
 - Test global pause/resume without changing each item's identity or progress.
-- Test pagination and initial list hydration before applying incremental updates.
+- Test pagination and initial list hydration before applying incremental updates. The decoder and model primitives now have unit coverage; end-to-end account startup ordering remains outstanding.
 - Test direct-download cancellation separately from list pause/resume.
 - Verify no UI work occurs on the TDLib receive thread.
 
